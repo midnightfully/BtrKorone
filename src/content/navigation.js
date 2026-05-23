@@ -1,6 +1,6 @@
 /**
  * BtrKorone - Quick Navigation
- * Adds useful shortcuts and navigation tweaks
+ * Adds sticky nav bar, keyboard shortcuts, and pagination improvements
  */
 
 (function BtrNavigation() {
@@ -10,11 +10,9 @@
     if (!window.__btrkorone) return;
     clearInterval(waitForInit);
 
-    const { settings } = window.__btrkorone;
-    if (!settings.quickNavigation) return;
-
+    if (!window.__btrkorone.hasFeature("quickNavigation")) return;
     init();
-  }, 100);
+  }, 50);
 
   function init() {
     addQuickNavBar();
@@ -22,22 +20,18 @@
     enhancePagination();
   }
 
-  /**
-   * Add a quick navigation bar with commonly used links
-   */
   function addQuickNavBar() {
-    const existingBar = document.querySelector(".btrkorone-quicknav");
-    if (existingBar) return;
+    if (document.querySelector(".btrkorone-quicknav")) return;
 
     const navLinks = [
-      { label: "Home", href: "/", icon: "H" },
-      { label: "Catalog", href: "/catalog", icon: "C" },
-      { label: "Games", href: "/games", icon: "G" },
-      { label: "Trades", href: "/trades", icon: "T" },
-      { label: "Inventory", href: "/my/inventory", icon: "I" },
-      { label: "Friends", href: "/my/friends", icon: "F" },
-      { label: "Groups", href: "/groups", icon: "Gr" },
-      { label: "Settings", href: "/my/settings", icon: "S" }
+      { label: "Home", href: "/", key: "h" },
+      { label: "Catalog", href: "/catalog", key: "c" },
+      { label: "Games", href: "/games", key: "g" },
+      { label: "Trades", href: "/trades", key: "t" },
+      { label: "Inventory", href: "/my/inventory", key: "i" },
+      { label: "Friends", href: "/my/friends", key: "f" },
+      { label: "Groups", href: "/groups", key: "r" },
+      { label: "Settings", href: "/my/settings", key: "s" }
     ];
 
     const quickNav = document.createElement("div");
@@ -51,11 +45,10 @@
       a.href = link.href;
       a.className = "btrkorone-quicknav-link";
       a.textContent = link.label;
-      a.title = `Go to ${link.label} (Alt+${link.icon})`;
+      a.title = `${link.label} (Alt+${link.key.toUpperCase()})`;
 
-      // Highlight current page
-      if (window.location.pathname === link.href || 
-          window.location.pathname.startsWith(link.href + "/")) {
+      if (window.location.pathname === link.href ||
+          (link.href !== "/" && window.location.pathname.startsWith(link.href))) {
         a.classList.add("active");
       }
 
@@ -64,8 +57,8 @@
 
     quickNav.appendChild(inner);
 
-    // Insert after navbar
-    const navbar = document.querySelector(".navbar, nav, #navigation");
+    // Insert after navbar or at top
+    const navbar = document.querySelector(".navbar, nav, #navigation, .nav-container");
     if (navbar && navbar.parentNode) {
       navbar.parentNode.insertBefore(quickNav, navbar.nextSibling);
     } else {
@@ -73,25 +66,21 @@
     }
   }
 
-  /**
-   * Add keyboard shortcuts for quick navigation
-   */
   function addKeyboardShortcuts() {
-    document.addEventListener("keydown", (e) => {
-      // Only trigger with Alt key, and not when typing in inputs
-      if (!e.altKey || e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
-        return;
-      }
+    const shortcuts = {
+      "h": "/",
+      "c": "/catalog",
+      "g": "/games",
+      "t": "/trades",
+      "i": "/my/inventory",
+      "f": "/my/friends",
+      "r": "/groups",
+      "s": "/my/settings"
+    };
 
-      const shortcuts = {
-        "h": "/",
-        "c": "/catalog",
-        "g": "/games",
-        "t": "/trades",
-        "i": "/my/inventory",
-        "f": "/my/friends",
-        "s": "/my/settings"
-      };
+    document.addEventListener("keydown", (e) => {
+      if (!e.altKey) return;
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable) return;
 
       const key = e.key.toLowerCase();
       if (shortcuts[key]) {
@@ -101,25 +90,20 @@
     });
   }
 
-  /**
-   * Enhance pagination with better UX
-   */
   function enhancePagination() {
     const paginators = document.querySelectorAll(
       ".pagination:not(.btrk-pagination), .pager:not(.btrk-pagination)"
     );
 
     paginators.forEach((paginator) => {
-      paginator.classList.add("btrk-pagination");
-      paginator.classList.add("btrkorone-pagination");
+      paginator.classList.add("btrk-pagination", "btrkorone-pagination");
 
-      // Add scroll-to-top on page change
       const links = paginator.querySelectorAll("a");
       links.forEach((link) => {
         link.addEventListener("click", () => {
           setTimeout(() => {
             window.scrollTo({ top: 0, behavior: "smooth" });
-          }, 100);
+          }, 150);
         });
       });
     });
