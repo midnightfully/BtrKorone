@@ -30,9 +30,11 @@
         "shared/constants.js",
         "shared/storage.js",
         "shared/koromons-api.js",
+        "shared/pekora-api.js",
         "content/main.js",
         "content/ui-enhancements.js",
-        "content/premium-features.js"
+        "content/premium-features.js",
+        "content/trade-features.js"
       ],
       "css": ["content/styles/btrkorone.css"],
       "run_at": "document_end"
