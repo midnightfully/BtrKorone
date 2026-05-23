@@ -1,15 +1,21 @@
 /**
- * BtrKorone - Trade Features (API-driven)
+ * BtrKorone - Trade Modal Enhancement (Rex tier)
  *
- * Uses Pekora's trade API directly for reliable data instead of DOM scraping.
- * Activates only on /My/Trades.aspx and trade-related pages.
+ * RoPro-style enhancement injected directly into Pekora's trade modal.
+ * Adds value badges to each item, total value summary, demand rating,
+ * and a green/red verdict indicator.
+ *
+ * Uses Pekora's trade API (with credentials:include) to get real data
+ * instead of fragile DOM scraping.
  */
 
-(function BtrTradeFeatures() {
+(function BtrTradeModalFeature() {
   "use strict";
 
-  const TRADE_PAGES = ["/My/Trades.aspx", "/trades", "/My/Trades"];
+  const TRADE_PAGES = ["/My/Trades.aspx", "/My/Trades", "/trades"];
   let cachedMyUserId = null;
+  let cachedTrades = [];        // recent trades by ID for quick lookup
+  let injectedTradeKey = null;  // key for the currently rendered modal
 
   function isTradePage() {
     return TRADE_PAGES.some(p => window.location.pathname.toLowerCase().includes(p.toLowerCase()));
@@ -20,16 +26,15 @@
   const waitForInit = setInterval(() => {
     if (!window.__btrkorone) return;
     clearInterval(waitForInit);
-    if (window.__btrkorone.tier < 1) return; // Plus or higher only
+
+    if (!window.__btrkorone.hasFeature("tradeModal")) return;
     if (!isTradePage()) return;
 
     init();
   }, 100);
 
   async function init() {
-    const { hasFeature } = window.__btrkorone;
-
-    // Wait for Koromons + APIs
+    // Wait for Koromons data
     if (typeof KoromonsAPI !== "undefined") {
       await KoromonsAPI.load();
     }
@@ -39,15 +44,12 @@
       const me = await PekoraAPI.getAuthenticatedUser();
       if (me) cachedMyUserId = me.id;
     }
-
     if (!cachedMyUserId) {
-      // Fallback: read from extension storage
       try {
         const status = await chrome.runtime.sendMessage({ type: "GET_STATUS" });
         if (status && status.userId) cachedMyUserId = Number(status.userId);
       } catch (e) {}
     }
-
     if (!cachedMyUserId) {
       console.warn("[BtrKorone/Trades] Could not determine current user ID");
       return;
@@ -55,386 +57,286 @@
 
     console.log("[BtrKorone/Trades] Init for user:", cachedMyUserId);
 
-    // === Plus Tier Features ===
-    if (hasFeature("tradeOverlay")) {
-      injectTradeOverlay();
-    }
+    // Pre-fetch trades for quick lookup when modals open
+    await refreshTradeCache();
 
-    if (hasFeature("tradeEnhancements")) {
-      observeForTradeModal();
-      enhanceTradeRows();
-    }
+    // Watch for trade modals opening
+    observeForTradeModal();
+  }
 
-    // === Rex Tier Features ===
-    if (hasFeature("advancedTradeCalculator")) {
-      injectTradeCalculator();
+  async function refreshTradeCache() {
+    if (typeof PekoraAPI === "undefined") return;
+    try {
+      const [inb, outb] = await Promise.all([
+        PekoraAPI.getInboundTrades(),
+        PekoraAPI.getOutboundTrades()
+      ]);
+      const all = [
+        ...((inb && inb.data) || []),
+        ...((outb && outb.data) || [])
+      ];
+      cachedTrades = all;
+      console.log(`[BtrKorone/Trades] Cached ${all.length} trades`);
+    } catch (e) {
+      console.warn("[BtrKorone/Trades] Could not pre-fetch trades:", e);
     }
   }
 
   // ============================================================
-  // TRADE OVERLAY (floating panel, draggable, minimizable)
-  // ============================================================
-
-  function injectTradeOverlay() {
-    if (document.querySelector(".btrkorone-trade-overlay")) return;
-
-    const overlay = document.createElement("div");
-    overlay.className = "btrkorone-trade-overlay";
-    overlay.innerHTML = `
-      <div class="btrk-overlay-header">
-        <span class="btrk-overlay-title">Trade Overview</span>
-        <button class="btrk-overlay-toggle" id="btrk-overlay-toggle" title="Minimize">&#8722;</button>
-      </div>
-      <div class="btrk-overlay-body" id="btrk-overlay-body">
-        <div class="btrk-overlay-section">
-          <h4>Offering</h4>
-          <div class="btrk-overlay-items" id="btrk-overlay-offering">
-            <span class="btrk-overlay-empty">Open a trade to see analysis</span>
-          </div>
-          <div class="btrk-overlay-total">Total: <span id="btrk-overlay-offer-total">0</span></div>
-        </div>
-        <div class="btrk-overlay-divider"></div>
-        <div class="btrk-overlay-section">
-          <h4>Requesting</h4>
-          <div class="btrk-overlay-items" id="btrk-overlay-requesting">
-            <span class="btrk-overlay-empty">Open a trade to see analysis</span>
-          </div>
-          <div class="btrk-overlay-total">Total: <span id="btrk-overlay-req-total">0</span></div>
-        </div>
-        <div class="btrk-overlay-verdict" id="btrk-overlay-verdict">
-          Select a trade to analyze
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(overlay);
-
-    // Minimize toggle
-    const toggleBtn = overlay.querySelector("#btrk-overlay-toggle");
-    const body = overlay.querySelector("#btrk-overlay-body");
-    toggleBtn.addEventListener("click", () => {
-      const minimized = body.style.display === "none";
-      body.style.display = minimized ? "block" : "none";
-      toggleBtn.innerHTML = minimized ? "&#8722;" : "&#43;";
-    });
-
-    // Make draggable
-    makeDraggable(overlay, overlay.querySelector(".btrk-overlay-header"));
-  }
-
-  function updateOverlayWithTrade(tradeDetail) {
-    if (!tradeDetail) return;
-    const overlay = document.querySelector(".btrkorone-trade-overlay");
-    if (!overlay) return;
-
-    const { myOffer, theirOffer, partner } = PekoraAPI.splitTradeOffers(tradeDetail, cachedMyUserId);
-    const myCalc = PekoraAPI.calculateOfferValue(myOffer ? myOffer.userAssets : []);
-    const theirCalc = PekoraAPI.calculateOfferValue(theirOffer ? theirOffer.userAssets : []);
-
-    // Update title with partner
-    if (partner) {
-      overlay.querySelector(".btrk-overlay-title").textContent = `Trade with ${partner.name}`;
-    }
-
-    // Update offering side
-    const offerEl = overlay.querySelector("#btrk-overlay-offering");
-    offerEl.innerHTML = renderItemList(myCalc.items);
-
-    const reqEl = overlay.querySelector("#btrk-overlay-requesting");
-    reqEl.innerHTML = renderItemList(theirCalc.items);
-
-    overlay.querySelector("#btrk-overlay-offer-total").textContent = formatValue(myCalc.totalValue);
-    overlay.querySelector("#btrk-overlay-req-total").textContent = formatValue(theirCalc.totalValue);
-
-    // Verdict
-    const verdictEl = overlay.querySelector("#btrk-overlay-verdict");
-    const diff = theirCalc.totalValue - myCalc.totalValue;
-    if (myCalc.totalValue === 0 && theirCalc.totalValue === 0) {
-      verdictEl.textContent = "No valued items in this trade";
-      verdictEl.className = "btrk-overlay-verdict";
-    } else {
-      const pct = myCalc.totalValue > 0 ? ((diff / myCalc.totalValue) * 100).toFixed(1) : 0;
-      if (diff > 0) {
-        verdictEl.textContent = `WIN: +${formatValue(diff)} (+${pct}%)`;
-        verdictEl.className = "btrk-overlay-verdict btrk-verdict-profit";
-      } else if (diff < 0) {
-        verdictEl.textContent = `LOSS: ${formatValue(diff)} (${pct}%)`;
-        verdictEl.className = "btrk-overlay-verdict btrk-verdict-loss";
-      } else {
-        verdictEl.textContent = "EVEN TRADE";
-        verdictEl.className = "btrk-overlay-verdict btrk-verdict-even";
-      }
-    }
-  }
-
-  function renderItemList(items) {
-    if (!items || items.length === 0) {
-      return '<span class="btrk-overlay-empty">No items</span>';
-    }
-    return items.map(item => {
-      const valueText = item.hasKoromonValue
-        ? `<span class="btrk-overlay-item-value">${formatValue(item.koromonValue)}</span>`
-        : `<span class="btrk-overlay-item-rap">RAP ${formatValue(item.rap)}</span>`;
-      const demandColor = item.hasKoromonValue && typeof KoromonsAPI !== "undefined"
-        ? KoromonsAPI.getDemandColor(item.demand)
-        : "#555";
-      return `<div class="btrk-overlay-item-line">
-        <span class="btrk-demand-dot" style="background:${demandColor}"></span>
-        <span class="btrk-overlay-item-name">${escapeHtml(item.name)}</span>
-        ${valueText}
-      </div>`;
-    }).join("");
-  }
-
-  // ============================================================
-  // TRADE TABLE ROW ENHANCEMENTS
-  // Adds value column to the trade list (My Transactions tab)
-  // ============================================================
-
-  let tradeRowCache = new Map();
-
-  async function enhanceTradeRows() {
-    // Pre-fetch all trade types so we can map trade IDs -> values
-    const inbound = await PekoraAPI.getInboundTrades();
-    const outbound = await PekoraAPI.getOutboundTrades();
-    const allTrades = [
-      ...((inbound && inbound.data) || []),
-      ...((outbound && outbound.data) || [])
-    ];
-
-    console.log(`[BtrKorone/Trades] Loaded ${allTrades.length} trades for row enhancement`);
-
-    // Continuously try to find trade rows in the table
-    const observer = new MutationObserver(() => annotateTradeRows(allTrades));
-    observer.observe(document.body, { childList: true, subtree: true });
-    annotateTradeRows(allTrades);
-  }
-
-  async function annotateTradeRows(trades) {
-    // Pekora's trade table uses tr elements with date cells.
-    // We try to find rows that link to a specific trade modal.
-    const rows = document.querySelectorAll("tr:not(.btrk-row-enhanced), .trade-row:not(.btrk-row-enhanced)");
-
-    rows.forEach(async row => {
-      // Try to extract a trade ID from any link/button within the row
-      const link = row.querySelector("a[href*='trade'], a[onclick*='trade'], [data-trade-id]");
-      let tradeId = null;
-
-      if (link) {
-        if (link.dataset.tradeId) tradeId = link.dataset.tradeId;
-        else {
-          const href = link.getAttribute("href") || link.getAttribute("onclick") || "";
-          const match = href.match(/(\d{4,})/);
-          if (match) tradeId = match[1];
-        }
-      }
-
-      if (!tradeId) return;
-      row.classList.add("btrk-row-enhanced");
-
-      // Don't fetch if we already cached
-      let detail = tradeRowCache.get(tradeId);
-      if (!detail) {
-        detail = await PekoraAPI.getTradeDetail(tradeId);
-        if (detail) tradeRowCache.set(tradeId, detail);
-      }
-      if (!detail) return;
-
-      const { myOffer, theirOffer } = PekoraAPI.splitTradeOffers(detail, cachedMyUserId);
-      const myCalc = PekoraAPI.calculateOfferValue(myOffer ? myOffer.userAssets : []);
-      const theirCalc = PekoraAPI.calculateOfferValue(theirOffer ? theirOffer.userAssets : []);
-      const diff = theirCalc.totalValue - myCalc.totalValue;
-      const pct = myCalc.totalValue > 0 ? ((diff / myCalc.totalValue) * 100).toFixed(0) : 0;
-
-      // Inject value cell
-      const valueCell = document.createElement("td");
-      valueCell.className = "btrk-trade-value-cell";
-      const verdict = diff > 0 ? "btrk-verdict-profit" : diff < 0 ? "btrk-verdict-loss" : "btrk-verdict-even";
-      const sign = diff >= 0 ? "+" : "";
-      valueCell.innerHTML = `
-        <div class="btrk-trade-value-summary ${verdict}">
-          <span class="btrk-trade-vs">${formatValue(myCalc.totalValue)} → ${formatValue(theirCalc.totalValue)}</span>
-          <span class="btrk-trade-diff">${sign}${pct}%</span>
-        </div>
-      `;
-      row.appendChild(valueCell);
-    });
-  }
-
-  // ============================================================
-  // TRADE MODAL DETECTION
-  // Watches for the trade detail modal opening and updates overlay
+  // MODAL DETECTION + ENHANCEMENT
   // ============================================================
 
   function observeForTradeModal() {
-    // Pekora modals usually have a class like "modal" and become visible
-    let activeTradeId = null;
-
-    const checkForModal = async () => {
-      const modal = document.querySelector(".modal:not(.btrk-modal-watched)");
-      if (!modal) return;
-
-      // Try to extract trade ID from modal content or URL
-      const tradeId = extractActiveTradeId();
-      if (tradeId && tradeId !== activeTradeId) {
-        activeTradeId = tradeId;
-        modal.classList.add("btrk-modal-watched");
-        const detail = await PekoraAPI.getTradeDetail(tradeId);
-        if (detail) {
-          updateOverlayWithTrade(detail);
-          injectModalValueTags(modal, detail);
-        }
-      }
-    };
-
-    const observer = new MutationObserver(checkForModal);
+    const observer = new MutationObserver(() => {
+      tryEnhanceVisibleModal();
+    });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-    checkForModal();
+    tryEnhanceVisibleModal();
   }
 
-  function extractActiveTradeId() {
-    // Method 1: data attributes
-    const el = document.querySelector("[data-active-trade-id], [data-trade-id]");
-    if (el) {
-      return el.dataset.activeTradeId || el.dataset.tradeId;
+  async function tryEnhanceVisibleModal() {
+    // Find the visible Trade Request modal.
+    // Pekora uses Bootstrap-style modals. Be permissive in our selector.
+    const modal = findVisibleTradeModal();
+    if (!modal) {
+      injectedTradeKey = null;
+      return;
     }
 
-    // Method 2: URL hash
-    const hash = window.location.hash;
-    const hashMatch = hash.match(/trade[=/](\d+)/i);
-    if (hashMatch) return hashMatch[1];
+    // Generate a stable key for the open modal so we don't re-inject endlessly
+    const modalKey = generateModalKey(modal);
+    if (modalKey === injectedTradeKey) return;
+    if (modal.querySelector(".btrk-trade-summary-panel")) {
+      injectedTradeKey = modalKey;
+      return;
+    }
 
-    // Method 3: URL query string
-    const urlMatch = window.location.search.match(/[?&]tradeId=(\d+)/i);
-    if (urlMatch) return urlMatch[1];
+    injectedTradeKey = modalKey;
+
+    // Resolve the trade ID, then fetch detail and enhance.
+    const tradeId = await resolveTradeIdFromModal(modal);
+    if (!tradeId) {
+      console.log("[BtrKorone/Trades] Modal open but couldn't resolve trade ID; skipping.");
+      return;
+    }
+
+    const detail = await PekoraAPI.getTradeDetail(tradeId);
+    if (!detail) return;
+
+    enhanceModal(modal, detail);
+  }
+
+  function findVisibleTradeModal() {
+    // Try common Bootstrap and React modal patterns
+    const candidates = document.querySelectorAll(
+      ".modal.show, .modal.in, .modal-content, [role='dialog'], .trade-modal, .modal-dialog"
+    );
+    for (const el of candidates) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      const text = (el.textContent || "").toLowerCase();
+      // Identify trade modals by their headings
+      if (text.includes("trade request") ||
+          text.includes("items you will give") ||
+          text.includes("items you will receive") ||
+          text.includes("items you gave") ||
+          text.includes("items you received")) {
+        // Get the highest meaningful container so we have room for our panel
+        return el.closest(".modal-content") || el.closest(".modal") || el;
+      }
+    }
+    return null;
+  }
+
+  function generateModalKey(modal) {
+    // Hash the visible item names so we know when the modal content changes
+    const names = [...modal.querySelectorAll("a, .item-name, .text-truncate")]
+      .map(el => el.textContent.trim())
+      .filter(s => s.length > 2 && s.length < 80)
+      .join("|");
+    return names.substring(0, 200);
+  }
+
+  /**
+   * Try to figure out which trade is currently shown in the modal.
+   * Strategy:
+   *   1. Look for a data-trade-id attribute or the trade ID embedded in the URL/onclick
+   *   2. Look for the partner username inside the modal and match against cachedTrades
+   *   3. Refresh the cache and retry
+   */
+  async function resolveTradeIdFromModal(modal) {
+    // Method 1: data attributes / hidden inputs
+    const dataEl = modal.querySelector("[data-trade-id], [data-tradeid]");
+    if (dataEl) {
+      const id = dataEl.dataset.tradeId || dataEl.dataset.tradeid;
+      if (id) return id;
+    }
+
+    // Method 2: anchor or button hrefs
+    const idMatch = (modal.innerHTML || "").match(/trade[_-]?id["'\s:=/]+(\d{4,})/i);
+    if (idMatch) return idMatch[1];
+
+    // Method 3: match by partner username
+    const partnerName = extractPartnerName(modal);
+    if (partnerName) {
+      let match = cachedTrades.find(t =>
+        t.user && (t.user.name || "").toLowerCase() === partnerName.toLowerCase()
+      );
+      if (!match) {
+        // Refresh once in case cache is stale
+        await refreshTradeCache();
+        match = cachedTrades.find(t =>
+          t.user && (t.user.name || "").toLowerCase() === partnerName.toLowerCase()
+        );
+      }
+      if (match) return String(match.id);
+    }
 
     return null;
   }
 
-  function injectModalValueTags(modal, tradeDetail) {
-    const { myOffer, theirOffer } = PekoraAPI.splitTradeOffers(tradeDetail, cachedMyUserId);
+  function extractPartnerName(modal) {
+    // The Pekora modal shows "Trade with USERNAME has been opened"
+    const text = modal.textContent || "";
+    const m = text.match(/Trade with\s+([A-Za-z0-9_]+)/i);
+    if (m) return m[1];
+
+    // Alternative: links to /users/{id}/profile
+    const profileLink = modal.querySelector("a[href*='/users/']");
+    if (profileLink) {
+      const name = (profileLink.textContent || "").trim();
+      if (name) return name;
+    }
+
+    return null;
+  }
+
+  // ============================================================
+  // ENHANCEMENT INJECTION
+  // ============================================================
+
+  function enhanceModal(modal, tradeDetail) {
+    const { myOffer, theirOffer, partner } = PekoraAPI.splitTradeOffers(tradeDetail, cachedMyUserId);
     const myCalc = PekoraAPI.calculateOfferValue(myOffer ? myOffer.userAssets : []);
     const theirCalc = PekoraAPI.calculateOfferValue(theirOffer ? theirOffer.userAssets : []);
 
-    // Find item cards in modal and tag them by name match
-    const itemCards = modal.querySelectorAll(".item-card, .trade-item, [class*='item']");
-    const allItems = [...myCalc.items, ...theirCalc.items];
+    // 1. Tag each item card with its individual value
+    injectItemBadges(modal, [...myCalc.items, ...theirCalc.items]);
 
-    itemCards.forEach(card => {
-      if (card.querySelector(".btrkorone-value-tag")) return;
-      const text = card.textContent || "";
-      const matched = allItems.find(i => i.name && text.includes(i.name));
-      if (!matched) return;
+    // 2. Inject the summary panel
+    injectSummaryPanel(modal, myCalc, theirCalc, partner);
+  }
 
-      const tag = document.createElement("div");
-      tag.className = "btrkorone-value-tag";
-      if (matched.hasKoromonValue) {
-        tag.classList.add("btrk-valued-live");
-        tag.innerHTML = `<span class="btrk-demand-dot" style="background:${KoromonsAPI.getDemandColor(matched.demand)}"></span>${formatValue(matched.koromonValue)}`;
-        tag.title = `Value: ${matched.koromonValue.toLocaleString()} | RAP: ${matched.rap.toLocaleString()} | Demand: ${matched.demand}`;
+  function injectItemBadges(modal, allItems) {
+    // Pekora item cards are wrapped in an .imageWrapper or contain an item name.
+    // We match by item name text inside each card.
+    const cards = modal.querySelectorAll(
+      "[class*='imageWrapper'], .item-card, .trade-item, .col-0-2-138"
+    );
+    cards.forEach(card => {
+      if (card.querySelector(".btrkorone-value-badge")) return;
+      const text = (card.textContent || "").trim();
+      // Find which item this card represents by matching the visible name
+      const item = allItems.find(i => i.name && text.toLowerCase().includes(i.name.toLowerCase()));
+      if (!item) return;
+
+      const badge = document.createElement("div");
+      badge.className = "btrkorone-value-badge";
+      const demandColor = item.hasKoromonValue && typeof KoromonsAPI !== "undefined"
+        ? KoromonsAPI.getDemandColor(item.demand)
+        : "#666";
+
+      if (item.hasKoromonValue) {
+        badge.innerHTML = `
+          <div class="btrk-badge-line btrk-badge-value">
+            <span class="btrk-demand-dot" style="background:${demandColor}"></span>
+            ${formatValue(item.koromonValue)}
+          </div>
+          <div class="btrk-badge-line btrk-badge-rap">
+            RAP ${formatValue(item.rap)}
+          </div>
+        `;
+        badge.title = `Value: ${item.koromonValue.toLocaleString()} | RAP: ${item.rap.toLocaleString()} | Demand: ${item.demand}`;
       } else {
-        tag.classList.add("btrk-no-value");
-        tag.textContent = `RAP ${formatValue(matched.rap)}`;
+        badge.innerHTML = `<div class="btrk-badge-line btrk-badge-rap">RAP ${formatValue(item.rap)}</div>`;
       }
-      card.style.position = "relative";
-      card.appendChild(tag);
+
+      // Position relative to the card
+      if (getComputedStyle(card).position === "static") {
+        card.style.position = "relative";
+      }
+      card.appendChild(badge);
     });
   }
 
-  // ============================================================
-  // ADVANCED TRADE CALCULATOR (Rex tier)
-  // ============================================================
+  function injectSummaryPanel(modal, myCalc, theirCalc, partner) {
+    if (modal.querySelector(".btrk-trade-summary-panel")) return;
 
-  function injectTradeCalculator() {
-    if (document.querySelector(".btrkorone-calc")) return;
+    const diff = theirCalc.totalValue - myCalc.totalValue;
+    const pct = myCalc.totalValue > 0 ? ((diff / myCalc.totalValue) * 100).toFixed(1) : 0;
+    const allItems = [...myCalc.items, ...theirCalc.items];
+    const validDemands = allItems
+      .filter(i => i.hasKoromonValue && i.demand && i.demand !== "Unknown")
+      .map(i => i.demand);
+    const demandText = computeDemandText(validDemands);
 
-    const tradeArea = document.querySelector(
-      ".trade-container, #trade-window, .trade-content, .trades-page, body"
-    );
-    if (!tradeArea) return;
+    let verdictClass = "btrk-verdict-even";
+    let verdictArrow = "→";
+    let verdictColor = "#ffd700";
+    if (diff > 0) { verdictClass = "btrk-verdict-profit"; verdictArrow = "↑"; verdictColor = "#4ade80"; }
+    else if (diff < 0) { verdictClass = "btrk-verdict-loss"; verdictArrow = "↓"; verdictColor = "#f87171"; }
 
-    const calc = document.createElement("div");
-    calc.className = "btrkorone-calc btrkorone-calc-floating";
-    calc.innerHTML = `
-      <div class="btrk-calc-header">
-        <span>Trade Calculator</span>
-        <span class="btrk-calc-badge">REX</span>
+    const panel = document.createElement("div");
+    panel.className = "btrk-trade-summary-panel";
+    panel.innerHTML = `
+      <div class="btrk-summary-header">
+        <img src="${chrome.runtime.getURL('icons/icon32.png')}" class="btrk-summary-logo">
+        <span>BtrKorone Trade Analysis</span>
       </div>
-      <div class="btrk-calc-body">
-        <div class="btrk-calc-row">
-          <label>Your value:</label>
-          <input type="number" class="btrk-calc-input" id="btrk-calc-yours" placeholder="0">
+      <div class="btrk-summary-grid">
+        <div class="btrk-summary-row">
+          <span class="btrk-summary-label">Your Total Value</span>
+          <span class="btrk-summary-val">${formatValue(myCalc.totalValue)}</span>
         </div>
-        <div class="btrk-calc-row">
-          <label>Their value:</label>
-          <input type="number" class="btrk-calc-input" id="btrk-calc-theirs" placeholder="0">
+        <div class="btrk-summary-row">
+          <span class="btrk-summary-label">Their Total Value</span>
+          <span class="btrk-summary-val">${formatValue(theirCalc.totalValue)}</span>
         </div>
-        <div class="btrk-calc-result" id="btrk-calc-result">
-          Enter values for analysis
+        <div class="btrk-summary-row">
+          <span class="btrk-summary-label">Korone Demand Rating</span>
+          <span class="btrk-summary-val">${demandText}</span>
         </div>
+      </div>
+      <div class="btrk-summary-verdict ${verdictClass}">
+        <span class="btrk-verdict-arrow">${verdictArrow}</span>
+        <span class="btrk-verdict-amount">${diff >= 0 ? "+" : ""}${formatValue(diff)}</span>
+        <span class="btrk-verdict-pct">(${pct}%)</span>
       </div>
     `;
-    document.body.appendChild(calc);
 
-    const yoursInput = calc.querySelector("#btrk-calc-yours");
-    const theirsInput = calc.querySelector("#btrk-calc-theirs");
-    const resultEl = calc.querySelector("#btrk-calc-result");
-
-    const calculate = () => {
-      const yours = parseInt(yoursInput.value) || 0;
-      const theirs = parseInt(theirsInput.value) || 0;
-      const diff = theirs - yours;
-      const pct = yours > 0 ? ((diff / yours) * 100).toFixed(1) : 0;
-      if (yours === 0 && theirs === 0) {
-        resultEl.textContent = "Enter values for analysis";
-        resultEl.className = "btrk-calc-result";
-      } else if (diff > 0) {
-        resultEl.textContent = `Profit: +${diff.toLocaleString()} (+${pct}%)`;
-        resultEl.className = "btrk-calc-result btrk-calc-profit";
-      } else if (diff < 0) {
-        resultEl.textContent = `Loss: ${diff.toLocaleString()} (${pct}%)`;
-        resultEl.className = "btrk-calc-result btrk-calc-loss";
-      } else {
-        resultEl.textContent = "Even trade";
-        resultEl.className = "btrk-calc-result btrk-calc-even";
-      }
-    };
-
-    yoursInput.addEventListener("input", calculate);
-    theirsInput.addEventListener("input", calculate);
+    // Insert at the bottom of the modal body, before action buttons if possible
+    const actionsRow = modal.querySelector(".modal-footer, .btn-group, .text-center");
+    if (actionsRow && actionsRow.parentNode) {
+      actionsRow.parentNode.insertBefore(panel, actionsRow);
+    } else {
+      const modalBody = modal.querySelector(".modal-body") || modal;
+      modalBody.appendChild(panel);
+    }
   }
 
-  // ============================================================
-  // UTILITIES
-  // ============================================================
-
-  function makeDraggable(element, handle) {
-    let startX = 0, startY = 0;
-    handle.style.cursor = "grab";
-    handle.addEventListener("mousedown", e => {
-      e.preventDefault();
-      startX = e.clientX;
-      startY = e.clientY;
-      handle.style.cursor = "grabbing";
-      const onMove = ev => {
-        const dx = startX - ev.clientX;
-        const dy = startY - ev.clientY;
-        startX = ev.clientX;
-        startY = ev.clientY;
-        element.style.top = (element.offsetTop - dy) + "px";
-        element.style.left = (element.offsetLeft - dx) + "px";
-        element.style.right = "auto";
-        element.style.bottom = "auto";
-      };
-      const onUp = () => {
-        handle.style.cursor = "grab";
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    });
+  function computeDemandText(demands) {
+    if (!demands || demands.length === 0) return "Unknown";
+    // Compute most common demand
+    const counts = {};
+    demands.forEach(d => { counts[d] = (counts[d] || 0) + 1; });
+    let top = "Unknown", topCount = 0;
+    for (const [d, c] of Object.entries(counts)) {
+      if (c > topCount) { top = d; topCount = c; }
+    }
+    return top;
   }
+
+  // === Helpers ===
 
   function formatValue(val) {
     const num = Math.abs(val);
@@ -442,9 +344,5 @@
     if (num >= 1000000) return sign + (num / 1000000).toFixed(1) + "M";
     if (num >= 1000) return sign + (num / 1000).toFixed(1) + "K";
     return sign + (num | 0).toLocaleString();
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 })();
