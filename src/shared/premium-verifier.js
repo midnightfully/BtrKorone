@@ -16,6 +16,7 @@
 const PremiumVerifier = {
   /**
    * Generate a cryptographically unique verification token
+   * @param {string|number} userId - Korone User ID
    */
   generateToken(userId) {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -69,39 +70,24 @@ const PremiumVerifier = {
   // === Korone About Me Verification ===
 
   /**
-   * Fetch user's Korone About Me / description to look for verification token
-   * This checks the Korone platform profile, not Roblox
+   * Fetch user's Korone/Pekora About Me / description to look for verification token
+   * Uses the Pekora API at pekora.zip/apisite/users/v1/users/{id}
    */
   async fetchKoroneAboutMe(userId) {
-    // Try Korone API endpoint for user about/description
     const url = BTRKORONE.KORONE_API_ENDPOINTS.USER_ABOUT.replace("{userId}", userId);
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: { "Accept": "application/json" }
+      });
       if (!response.ok) {
-        // Fallback: try the general user profile endpoint
-        return await this.fetchKoroneProfileDescription(userId);
+        console.warn(`[BtrKorone] Korone profile API returned ${response.status}`);
+        return "";
       }
       const data = await response.json();
-      // Return the about/description text
-      return data.description || data.aboutMe || data.blurb || "";
-    } catch (error) {
-      console.warn("[BtrKorone] Korone About Me fetch error, trying fallback:", error);
-      return await this.fetchKoroneProfileDescription(userId);
-    }
-  },
-
-  /**
-   * Fallback: fetch Korone user profile and extract description
-   */
-  async fetchKoroneProfileDescription(userId) {
-    const url = BTRKORONE.KORONE_API_ENDPOINTS.USER_PROFILE.replace("{userId}", userId);
-    try {
-      const response = await fetch(url);
-      if (!response.ok) return "";
-      const data = await response.json();
+      // Pekora API returns description/blurb field
       return data.description || data.aboutMe || data.blurb || data.bio || "";
     } catch (error) {
-      console.error("[BtrKorone] Korone profile fetch error:", error);
+      console.error("[BtrKorone] Korone About Me fetch error:", error);
       return "";
     }
   },

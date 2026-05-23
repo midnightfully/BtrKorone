@@ -22,10 +22,11 @@ const BTRKORONE = {
     GAMEPASSES: "https://www.roblox.com/game-pass/"
   },
 
-  // Korone API endpoints
+  // Korone/Pekora API endpoints
   KORONE_API_ENDPOINTS: {
-    USER_PROFILE: "https://api.korone.live/api/users/{userId}",
-    USER_ABOUT: "https://api.korone.live/api/users/{userId}/about",
+    USER_PROFILE: "https://www.pekora.zip/apisite/users/v1/users/{userId}",
+    USER_ABOUT: "https://www.pekora.zip/apisite/users/v1/users/{userId}",
+    USER_PROFILE_PAGE: "https://www.pekora.zip/users/{userId}/profile",
     GAME_JOIN: "https://www.korone.live/games/{placeId}/play"
   },
 

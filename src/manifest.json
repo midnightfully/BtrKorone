@@ -13,6 +13,7 @@
     "*://*.korone.live/*",
     "*://api.korone.live/*",
     "*://economy.korone.live/*",
+    "*://*.pekora.zip/*",
     "*://*.roblox.com/*",
     "*://thumbnails.roblox.com/*",
     "*://inventory.roblox.com/*",

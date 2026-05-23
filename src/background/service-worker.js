@@ -145,7 +145,7 @@ async function handleSetFeatureToggles(toggles) {
 
 async function handleGenerateToken(userId) {
   if (!userId || isNaN(userId)) {
-    return { error: "Invalid User ID. Please provide a valid Roblox User ID." };
+    return { error: "Invalid User ID. Please provide a valid Korone User ID (number from your profile URL)." };
   }
 
   const token = PremiumVerifier.generateToken(userId);
