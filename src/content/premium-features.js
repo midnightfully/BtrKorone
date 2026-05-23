@@ -19,8 +19,19 @@
     init();
   }, 50);
 
-  function init() {
+  async function init() {
     const { hasFeature } = window.__btrkorone;
+
+    // Load Koromons live data (public API, no auth needed)
+    if (typeof KoromonsAPI !== "undefined") {
+      const loaded = await KoromonsAPI.load();
+      if (loaded) {
+        console.log(`[BtrKorone] Koromons data loaded: ${KoromonsAPI.itemCount} items`);
+        window.__btrkorone.koromons = KoromonsAPI;
+      } else {
+        console.warn("[BtrKorone] Koromons data unavailable - value features degraded");
+      }
+    }
 
     // === PLUS TIER ===
     if (hasFeature("tradeEnhancements")) initTradeEnhancements();
@@ -69,9 +80,35 @@
     items.forEach((item) => {
       item.classList.add("btrk-trade-enhanced", "btrkorone-trade-item");
 
+      // Extract item name from the element
+      const nameEl = item.querySelector(".item-name, .asset-name, .name, [data-item-name]");
+      const itemName = nameEl?.textContent?.trim() || nameEl?.dataset?.itemName || item.dataset?.itemName || "";
+
+      // Look up live value from Koromons
       const valueTag = document.createElement("div");
       valueTag.className = "btrkorone-value-tag";
-      valueTag.textContent = "---";
+
+      if (itemName && KoromonsAPI && KoromonsAPI.isLoaded) {
+        const data = KoromonsAPI.getItemData(itemName);
+        if (data && data.value > 0) {
+          valueTag.textContent = formatValue(data.value);
+          valueTag.title = `Value: ${data.value.toLocaleString()} | RAP: ${data.rap.toLocaleString()} | Demand: ${data.demand}`;
+          valueTag.classList.add("btrk-valued-live");
+
+          // Add demand dot
+          const demandDot = document.createElement("span");
+          demandDot.className = "btrk-demand-dot";
+          demandDot.style.background = KoromonsAPI.getDemandColor(data.demand);
+          demandDot.title = `Demand: ${data.demand}`;
+          valueTag.prepend(demandDot);
+        } else {
+          valueTag.textContent = "N/V";
+          valueTag.classList.add("btrk-no-value");
+        }
+      } else {
+        valueTag.textContent = "---";
+      }
+
       item.appendChild(valueTag);
     });
 
@@ -103,6 +140,47 @@
         </div>
       `;
       tradeWindow.appendChild(summary);
+    }
+
+    // Calculate live totals from value tags
+    if (!KoromonsAPI || !KoromonsAPI.isLoaded) return;
+
+    const offerSection = document.querySelector(".trade-offer, .your-items, [data-trade-side='offer']");
+    const reqSection = document.querySelector(".trade-request, .their-items, [data-trade-side='request']");
+
+    const sumValues = (section) => {
+      if (!section) return 0;
+      let total = 0;
+      section.querySelectorAll(".trade-item, .item").forEach(item => {
+        const nameEl = item.querySelector(".item-name, .asset-name, .name, [data-item-name]");
+        const name = nameEl?.textContent?.trim() || nameEl?.dataset?.itemName || item.dataset?.itemName || "";
+        if (name) {
+          const val = KoromonsAPI.getValue(name) || KoromonsAPI.getValue(KoromonsAPI.fuzzySearch(name));
+          total += val;
+        }
+      });
+      return total;
+    };
+
+    const myTotal = sumValues(offerSection);
+    const theirTotal = sumValues(reqSection);
+    const diff = theirTotal - myTotal;
+
+    const yourEl = summary.querySelector(".trade-value-your");
+    const theirEl = summary.querySelector(".trade-value-their");
+    const diffEl = summary.querySelector(".trade-value-diff");
+
+    if (yourEl) yourEl.textContent = myTotal > 0 ? formatValue(myTotal) : "---";
+    if (theirEl) theirEl.textContent = theirTotal > 0 ? formatValue(theirTotal) : "---";
+    if (diffEl) {
+      if (myTotal > 0 || theirTotal > 0) {
+        const sign = diff >= 0 ? "+" : "";
+        diffEl.textContent = `${sign}${formatValue(diff)}`;
+        diffEl.style.color = diff > 0 ? "#4caf50" : diff < 0 ? "#f44336" : "#ffd700";
+      } else {
+        diffEl.textContent = "---";
+        diffEl.style.color = "";
+      }
     }
   }
 
@@ -190,17 +268,66 @@
 
     const offerEl = document.getElementById("btrk-overlay-offering");
     const reqEl = document.getElementById("btrk-overlay-requesting");
+    const offerTotalEl = document.getElementById("btrk-overlay-offer-total");
+    const reqTotalEl = document.getElementById("btrk-overlay-req-total");
+    const verdictEl = document.getElementById("btrk-overlay-verdict");
+
+    // Calculate values using Koromons
+    const calcSectionValue = (items) => {
+      let total = 0;
+      let names = [];
+      items.forEach(item => {
+        const nameEl = item.querySelector(".item-name, .asset-name, .name, [data-item-name]");
+        const name = nameEl?.textContent?.trim() || nameEl?.dataset?.itemName || item.dataset?.itemName || "";
+        if (name && KoromonsAPI && KoromonsAPI.isLoaded) {
+          const val = KoromonsAPI.getValue(name);
+          total += val;
+          if (val > 0) names.push(`${name} (${formatValue(val)})`);
+          else names.push(`${name} (N/V)`);
+        } else if (name) {
+          names.push(name);
+        }
+      });
+      return { total, names };
+    };
+
+    const offer = calcSectionValue(offerItems);
+    const req = calcSectionValue(reqItems);
 
     if (offerEl) {
-      offerEl.innerHTML = offerItems.length > 0
-        ? `<span class="btrk-overlay-count">${offerItems.length} item${offerItems.length > 1 ? "s" : ""}</span>`
+      offerEl.innerHTML = offer.names.length > 0
+        ? offer.names.map(n => `<div class="btrk-overlay-item-line">${n}</div>`).join("")
         : '<span class="btrk-overlay-empty">No items</span>';
     }
 
     if (reqEl) {
-      reqEl.innerHTML = reqItems.length > 0
-        ? `<span class="btrk-overlay-count">${reqItems.length} item${reqItems.length > 1 ? "s" : ""}</span>`
+      reqEl.innerHTML = req.names.length > 0
+        ? req.names.map(n => `<div class="btrk-overlay-item-line">${n}</div>`).join("")
         : '<span class="btrk-overlay-empty">No items</span>';
+    }
+
+    if (offerTotalEl) offerTotalEl.textContent = offer.total > 0 ? formatValue(offer.total) : "0";
+    if (reqTotalEl) reqTotalEl.textContent = req.total > 0 ? formatValue(req.total) : "0";
+
+    // Verdict
+    if (verdictEl) {
+      if (offer.total === 0 && req.total === 0) {
+        verdictEl.textContent = "Select items to see trade analysis";
+        verdictEl.className = "btrk-overlay-verdict";
+      } else {
+        const diff = req.total - offer.total;
+        const pct = offer.total > 0 ? ((diff / offer.total) * 100).toFixed(1) : 0;
+        if (diff > 0) {
+          verdictEl.textContent = `PROFIT: +${formatValue(diff)} (+${pct}%)`;
+          verdictEl.className = "btrk-overlay-verdict btrk-verdict-profit";
+        } else if (diff < 0) {
+          verdictEl.textContent = `LOSS: ${formatValue(diff)} (${pct}%)`;
+          verdictEl.className = "btrk-overlay-verdict btrk-verdict-loss";
+        } else {
+          verdictEl.textContent = "EVEN TRADE";
+          verdictEl.className = "btrk-overlay-verdict btrk-verdict-even";
+        }
+      }
     }
   }
 
@@ -319,9 +446,30 @@
 
     items.forEach((item) => {
       item.classList.add("btrk-valued");
+
+      // Extract item name
+      const nameEl = item.querySelector(".item-name, .asset-name, .name, [data-item-name], .card-title");
+      const itemName = nameEl?.textContent?.trim() || nameEl?.dataset?.itemName || item.dataset?.itemName || "";
+
       const est = document.createElement("div");
       est.className = "btrkorone-value-estimate";
-      est.innerHTML = '<span class="btrk-est-label">Est:</span> <span class="btrk-est-value">---</span>';
+
+      if (itemName && KoromonsAPI && KoromonsAPI.isLoaded) {
+        const data = KoromonsAPI.getItemData(itemName);
+        if (data && data.value > 0) {
+          est.innerHTML = `
+            <span class="btrk-est-label">Val:</span>
+            <span class="btrk-est-value">${formatValue(data.value)}</span>
+            <span class="btrk-demand-badge" style="background:${KoromonsAPI.getDemandColor(data.demand)}">${data.demand}</span>
+          `;
+          est.title = `Value: ${data.value.toLocaleString()} | RAP: ${data.rap.toLocaleString()} | Demand: ${data.demand} | Trend: ${data.trend}\nSupply: ${data.supply.available} available, ${data.supply.hoarded} hoarded`;
+        } else {
+          est.innerHTML = '<span class="btrk-est-label">Val:</span> <span class="btrk-est-value btrk-no-val">N/A</span>';
+        }
+      } else {
+        est.innerHTML = '<span class="btrk-est-label">Val:</span> <span class="btrk-est-value">---</span>';
+      }
+
       item.appendChild(est);
     });
   }
@@ -517,5 +665,16 @@
         popup.style.display = "none";
       }
     });
+  }
+  // ============================================================
+  // UTILITY: Format value for display
+  // ============================================================
+
+  function formatValue(val) {
+    const num = Math.abs(val);
+    const sign = val < 0 ? "-" : "";
+    if (num >= 1000000) return sign + (num / 1000000).toFixed(1) + "M";
+    if (num >= 1000) return sign + (num / 1000).toFixed(1) + "K";
+    return sign + num.toLocaleString();
   }
 })();

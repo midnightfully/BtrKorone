@@ -7,7 +7,8 @@
 importScripts(
   "../shared/constants.js",
   "../shared/storage.js",
-  "../shared/premium-verifier.js"
+  "../shared/premium-verifier.js",
+  "../shared/koromons-api.js"
 );
 
 // === Extension Install / Update ===
@@ -24,6 +25,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   chrome.alarms.create(BTRKORONE.VERIFICATION.ALARM_NAME, {
     periodInMinutes: BTRKORONE.VERIFICATION.RECHECK_INTERVAL_HOURS * 60
   });
+
+  // Set up Koromons cache refresh alarm (every 30 min)
+  chrome.alarms.create("btrkorone_koromons_refresh", {
+    periodInMinutes: 30
+  });
+
+  // Initial Koromons cache load
+  KoromonsAPI.refresh();
 });
 
 // === Alarm Handler (Periodic Recheck) ===
@@ -31,6 +40,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === BTRKORONE.VERIFICATION.ALARM_NAME) {
     console.log("[BtrKorone] Running periodic premium recheck...");
     await performPeriodicRecheck();
+  }
+  if (alarm.name === "btrkorone_koromons_refresh") {
+    console.log("[BtrKorone] Refreshing Koromons item cache...");
+    await KoromonsAPI.refresh();
   }
 });
 
