@@ -25,9 +25,9 @@ const BTRKORONE = {
     GAME_JOIN: "https://www.pekora.zip/games/{placeId}/play"
   },
 
-  // Pekora gamepass verification (NOT Roblox - gamepasses are on Pekora)
+  // Pekora gamepass verification - uses "Asset" type (not "GamePass" like Roblox)
   GAMEPASS_API: {
-    INVENTORY: "https://www.pekora.zip/apisite/inventory/v1/users/{userId}/items/GamePass/{gamepassId}"
+    INVENTORY: "https://www.pekora.zip/apisite/inventory/v1/users/{userId}/items/Asset/{gamepassId}"
   },
 
   // Premium tier definitions
