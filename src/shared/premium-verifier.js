@@ -143,7 +143,7 @@ const PremiumVerifier = {
     return {
       success: false, tier: BTRKORONE.TIERS.FREE.id, username, avatarUrl, error: "NO_GAMEPASS",
       message: isPrivate
-        ? "Your Roblox inventory is private. Make it public to verify gamepass ownership."
+        ? "Your Korone inventory is private. Make it public to verify gamepass ownership."
         : "Token verified, but no BtrKorone gamepass found. Purchase a gamepass to unlock premium."
     };
   },
