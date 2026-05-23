@@ -260,7 +260,7 @@ function setupVerification() {
   btnGenerate.addEventListener("click", async () => {
     const userId = document.getElementById("input-userid").value.trim();
     if (!userId || isNaN(userId)) {
-      showMessage("Please enter a valid numeric Roblox User ID.", "error");
+      showMessage("Please enter a valid Korone User ID (the number from your profile URL).", "error");
       return;
     }
 
