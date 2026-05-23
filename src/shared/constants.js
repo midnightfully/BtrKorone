@@ -25,10 +25,9 @@ const BTRKORONE = {
     GAME_JOIN: "https://www.pekora.zip/games/{placeId}/play"
   },
 
-  // Roblox API (for gamepass verification only)
-  ROBLOX_API: {
-    INVENTORY: "https://inventory.roblox.com/v1/users/{userId}/items/GamePass/{gamepassId}",
-    GAMEPASSES: "https://www.roblox.com/game-pass/"
+  // Pekora gamepass verification (NOT Roblox - gamepasses are on Pekora)
+  GAMEPASS_API: {
+    INVENTORY: "https://www.pekora.zip/apisite/inventory/v1/users/{userId}/items/GamePass/{gamepassId}"
   },
 
   // Premium tier definitions
@@ -48,7 +47,7 @@ const BTRKORONE = {
       color: "#4fc3f7",
       badge: "+",
       cssClass: "tier-plus",
-      gamepassId: 100001, // Replace with actual Korone gamepass ID for Plus
+      gamepassId: 721129, // BtrKorone Plus gamepass on Pekora
       price: "One-time Robux purchase"
     },
     REX: {
@@ -58,7 +57,7 @@ const BTRKORONE = {
       color: "#ffd700",
       badge: "REX",
       cssClass: "tier-rex",
-      gamepassId: 100002, // Replace with actual Korone gamepass ID for Rex
+      gamepassId: 721215, // BtrKorone Rex gamepass on Pekora
       price: "One-time Robux purchase"
     }
   },
@@ -88,7 +87,6 @@ const BTRKORONE = {
   FEATURE_REGISTRY: [
     // === FREE TIER FEATURES ===
     { id: "playButton", name: "Play Button", description: "Adds a play button to game pages that launches games instantly", tier: 0, category: "games", defaultEnabled: true },
-    { id: "uiEnhancements", name: "UI Enhancements", description: "Modernizes cards, hover effects, and layout cleanup", tier: 0, category: "ui", defaultEnabled: true },
     { id: "quickNavigation", name: "Quick Navigation", description: "Sticky nav bar with keyboard shortcuts (Alt+key)", tier: 0, category: "navigation", defaultEnabled: true },
     { id: "compactMode", name: "Compact Mode", description: "Reduce spacing for information-dense browsing", tier: 0, category: "ui", defaultEnabled: false },
 

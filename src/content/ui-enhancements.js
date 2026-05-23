@@ -1,6 +1,6 @@
 /**
  * BtrKorone - UI Enhancements
- * Modernizes layout, enhances cards, adds premium badges, profile improvements
+ * Card hover effects, premium badges
  * Play button logic is handled in main.js for immediate injection
  */
 
@@ -11,16 +11,11 @@
     if (!window.__btrkorone) return;
     clearInterval(waitForInit);
 
-    const { hasFeature } = window.__btrkorone;
-    if (!hasFeature("uiEnhancements")) return;
-
     init();
   }, 50);
 
   function init() {
-    enhanceNavbar();
     enhanceCards();
-    enhanceProfilePage();
     addPremiumBadges();
 
     // Observe DOM for dynamically loaded content
