@@ -1,22 +1,18 @@
 /**
  * BtrKorone - Premium Verification System
- * Handles Roblox gamepass ownership verification and Korone About Me token validation
- * Also fetches and caches user avatar
+ * Uses Pekora API for username/avatar, Roblox API for gamepass verification
  *
- * Verification Flow:
- * 1. User provides their Roblox User ID
- * 2. Extension generates a unique random verification token
- * 3. User places token in their Korone "About Me" section
- * 4. User clicks "Verify" - extension checks Korone About Me for token
- * 5. Extension also checks Roblox gamepass ownership (Plus / Rex)
- * 6. Premium tier is activated and cached locally
- * 7. Avatar is fetched from Roblox thumbnail API and cached
+ * Flow:
+ * 1. User provides Korone User ID (from pekora.zip/users/{id}/profile)
+ * 2. Extension generates unique token, user puts it in Korone About Me
+ * 3. Extension checks Korone About Me for token (via Pekora API)
+ * 4. Extension checks Roblox gamepass ownership (Plus / Rex)
+ * 5. Tier activated, username + avatar cached from Pekora
  */
 
 const PremiumVerifier = {
   /**
    * Generate a cryptographically unique verification token
-   * @param {string|number} userId - Korone User ID
    */
   generateToken(userId) {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -29,67 +25,43 @@ const PremiumVerifier = {
     return `${BTRKORONE.VERIFICATION.TOKEN_PREFIX}${userId}-${random}`;
   },
 
-  // === Avatar Fetching ===
+  // === Pekora Avatar (Public - no auth needed) ===
 
   /**
-   * Fetch user's Roblox avatar headshot URL
+   * Get Pekora avatar URL for a user (direct image URL, no fetch needed)
    */
-  async fetchAvatarUrl(userId) {
-    const url = BTRKORONE.ROBLOX_API.USER_AVATAR_HEADSHOT.replace("{userId}", userId);
-    try {
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const data = await response.json();
-      if (data.data && data.data.length > 0 && data.data[0].imageUrl) {
-        return data.data[0].imageUrl;
-      }
-      return null;
-    } catch (error) {
-      console.error("[BtrKorone] Avatar fetch error:", error);
-      return null;
-    }
+  getAvatarUrl(userId) {
+    return BTRKORONE.PEKORA_API.USER_HEADSHOT.replace("{userId}", userId);
   },
 
-  // === Roblox Profile ===
+  // === Pekora Profile (needs user to be logged in on pekora.zip) ===
 
   /**
-   * Fetch user profile from Roblox API
+   * Fetch user profile from Pekora API
+   * Note: requires the user's .PUPPYSECURITY cookie (auto-sent by browser)
    */
-  async fetchRobloxProfile(userId) {
-    const url = BTRKORONE.ROBLOX_API.USER_PROFILE.replace("{userId}", userId);
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Profile fetch failed: ${response.status}`);
-      return await response.json();
-    } catch (error) {
-      console.error("[BtrKorone] Roblox profile fetch error:", error);
-      return null;
-    }
-  },
-
-  // === Korone About Me Verification ===
-
-  /**
-   * Fetch user's Korone/Pekora About Me / description to look for verification token
-   * Uses the Pekora API at pekora.zip/apisite/users/v1/users/{id}
-   */
-  async fetchKoroneAboutMe(userId) {
-    const url = BTRKORONE.KORONE_API_ENDPOINTS.USER_ABOUT.replace("{userId}", userId);
+  async fetchPekoraProfile(userId) {
+    const url = BTRKORONE.PEKORA_API.USER_PROFILE.replace("{userId}", userId);
     try {
       const response = await fetch(url, {
+        credentials: "include",
         headers: { "Accept": "application/json" }
       });
-      if (!response.ok) {
-        console.warn(`[BtrKorone] Korone profile API returned ${response.status}`);
-        return "";
-      }
-      const data = await response.json();
-      // Pekora API returns description/blurb field
-      return data.description || data.aboutMe || data.blurb || data.bio || "";
+      if (!response.ok) return null;
+      return await response.json();
     } catch (error) {
-      console.error("[BtrKorone] Korone About Me fetch error:", error);
-      return "";
+      console.error("[BtrKorone] Pekora profile fetch error:", error);
+      return null;
     }
+  },
+
+  /**
+   * Fetch Korone About Me / description for token verification
+   */
+  async fetchKoroneAboutMe(userId) {
+    const profile = await this.fetchPekoraProfile(userId);
+    if (!profile) return "";
+    return profile.description || profile.blurb || profile.aboutMe || profile.bio || "";
   },
 
   /**
@@ -97,50 +69,36 @@ const PremiumVerifier = {
    */
   async verifyKoroneToken(userId, expectedToken) {
     const aboutMe = await this.fetchKoroneAboutMe(userId);
-    if (aboutMe === null || aboutMe === undefined) {
+    if (aboutMe === "") {
+      // Could be empty profile or failed fetch
       return { verified: false, error: "PROFILE_FETCH_FAILED" };
     }
-
     const hasToken = aboutMe.includes(expectedToken);
-    return {
-      verified: hasToken,
-      error: hasToken ? null : "TOKEN_NOT_FOUND"
-    };
+    return { verified: hasToken, error: hasToken ? null : "TOKEN_NOT_FOUND" };
   },
 
-  // === Gamepass Ownership ===
+  // === Roblox Gamepass Ownership ===
 
-  /**
-   * Check if user owns a specific Roblox gamepass
-   */
   async checkGamepassOwnership(userId, gamepassId) {
     const url = BTRKORONE.ROBLOX_API.INVENTORY
       .replace("{userId}", userId)
       .replace("{gamepassId}", gamepassId);
-
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        if (response.status === 403) {
-          return { owned: false, error: "PRIVATE_INVENTORY" };
-        }
+        if (response.status === 403) return { owned: false, error: "PRIVATE_INVENTORY" };
         throw new Error(`Inventory check failed: ${response.status}`);
       }
       const data = await response.json();
-      const owned = data.data && data.data.length > 0;
-      return { owned, error: null };
+      return { owned: data.data && data.data.length > 0, error: null };
     } catch (error) {
       console.error("[BtrKorone] Gamepass check error:", error);
       return { owned: false, error: error.message };
     }
   },
 
-  // === Full Verification Flow ===
+  // === Full Verification ===
 
-  /**
-   * Full verification: check Korone About Me for token + check gamepass ownership
-   * Returns the highest tier the user qualifies for
-   */
   async performFullVerification(userId, token) {
     // Step 1: Verify token in Korone About Me
     const tokenResult = await this.verifyKoroneToken(userId, token);
@@ -150,84 +108,50 @@ const PremiumVerifier = {
         tier: BTRKORONE.TIERS.FREE.id,
         error: tokenResult.error,
         message: tokenResult.error === "PROFILE_FETCH_FAILED"
-          ? "Could not fetch your Korone profile. Please try again."
+          ? "Could not fetch your Korone profile. Make sure you're logged in to pekora.zip."
           : "Verification token not found in your Korone About Me section. Make sure you saved it."
       };
     }
 
-    // Step 2: Fetch Roblox profile for username
-    const robloxProfile = await this.fetchRobloxProfile(userId);
-    const username = robloxProfile ? robloxProfile.name : null;
+    // Step 2: Get username from Pekora
+    const profile = await this.fetchPekoraProfile(userId);
+    const username = profile ? (profile.name || profile.username || profile.displayName) : null;
 
-    // Step 3: Fetch and cache avatar
-    const avatarUrl = await this.fetchAvatarUrl(userId);
+    // Step 3: Avatar URL (public, no fetch needed)
+    const avatarUrl = this.getAvatarUrl(userId);
 
     // Step 4: Check Rex gamepass first (higher tier)
     const rexCheck = await this.checkGamepassOwnership(userId, BTRKORONE.TIERS.REX.gamepassId);
     if (rexCheck.owned) {
-      return {
-        success: true,
-        tier: BTRKORONE.TIERS.REX.id,
-        username,
-        avatarUrl,
-        error: null,
-        message: "BtrKorone Rex activated! You have access to ALL premium features."
-      };
+      return { success: true, tier: BTRKORONE.TIERS.REX.id, username, avatarUrl, error: null,
+        message: "BtrKorone Rex activated! You have access to ALL premium features." };
     }
 
     // Step 5: Check Plus gamepass
     const plusCheck = await this.checkGamepassOwnership(userId, BTRKORONE.TIERS.PLUS.gamepassId);
     if (plusCheck.owned) {
-      return {
-        success: true,
-        tier: BTRKORONE.TIERS.PLUS.id,
-        username,
-        avatarUrl,
-        error: null,
-        message: "BtrKorone+ activated! Enjoy your enhanced features."
-      };
+      return { success: true, tier: BTRKORONE.TIERS.PLUS.id, username, avatarUrl, error: null,
+        message: "BtrKorone+ activated! Enjoy your enhanced features." };
     }
 
-    // Step 6: Token verified but no gamepass owned
+    // Step 6: Token verified but no gamepass
     const isPrivate = rexCheck.error === "PRIVATE_INVENTORY" || plusCheck.error === "PRIVATE_INVENTORY";
-    const errorMsg = isPrivate
-      ? "Your Roblox inventory is private. Please make it public to verify gamepass ownership, then try again."
-      : "Token verified, but no BtrKorone gamepass found. Purchase a gamepass via Robux to unlock premium features.";
-
     return {
-      success: false,
-      tier: BTRKORONE.TIERS.FREE.id,
-      username,
-      avatarUrl,
-      error: "NO_GAMEPASS",
-      message: errorMsg
+      success: false, tier: BTRKORONE.TIERS.FREE.id, username, avatarUrl, error: "NO_GAMEPASS",
+      message: isPrivate
+        ? "Your Roblox inventory is private. Make it public to verify gamepass ownership."
+        : "Token verified, but no BtrKorone gamepass found. Purchase a gamepass to unlock premium."
     };
   },
 
   // === Background Recheck ===
 
-  /**
-   * Quick re-verification (skips token check, just checks gamepass ownership)
-   * Used for periodic background rechecks
-   */
   async recheckOwnership(userId) {
     const rexCheck = await this.checkGamepassOwnership(userId, BTRKORONE.TIERS.REX.gamepassId);
     if (rexCheck.owned) return BTRKORONE.TIERS.REX.id;
-
     const plusCheck = await this.checkGamepassOwnership(userId, BTRKORONE.TIERS.PLUS.gamepassId);
     if (plusCheck.owned) return BTRKORONE.TIERS.PLUS.id;
-
     return BTRKORONE.TIERS.FREE.id;
-  },
-
-  /**
-   * Check if verification cache has expired
-   */
-  async needsRecheck() {
-    const lastCheck = await BtrStorage.getVerificationTimestamp();
-    if (!lastCheck) return true;
-    const hoursSinceCheck = (Date.now() - lastCheck) / (1000 * 60 * 60);
-    return hoursSinceCheck >= BTRKORONE.VERIFICATION.RECHECK_INTERVAL_HOURS;
   }
 };
 

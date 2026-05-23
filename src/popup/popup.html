@@ -1,150 +1,140 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BtrKorone</title>
+  <link rel="stylesheet" href="daisyui.min.css">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="popup-container">
-    <!-- Header with Avatar -->
+    <!-- Header -->
     <header class="popup-header">
       <div class="header-left">
-        <div class="avatar-container" id="avatar-container">
-          <img src="../icons/icon32.png" alt="Avatar" class="avatar-img" id="avatar-img">
-          <div class="avatar-tier-ring" id="avatar-tier-ring"></div>
+        <div class="avatar">
+          <div class="avatar-ring">
+            <img src="../icons/icon32.png" alt="Avatar" id="avatar-img">
+          </div>
         </div>
         <div class="header-info">
-          <h1 id="header-title">BtrKorone</h1>
+          <span class="header-title">BtrKorone</span>
           <span class="header-username" id="header-username"></span>
         </div>
       </div>
-      <div class="tier-badge" id="tier-badge">Free</div>
+      <span class="badge badge-sm" id="tier-badge">FREE</span>
     </header>
 
-    <!-- Tab Navigation -->
-    <nav class="tab-nav">
-      <button class="tab-btn active" data-tab="home">Home</button>
-      <button class="tab-btn" data-tab="features">Features</button>
-      <button class="tab-btn" data-tab="premium">Premium</button>
-    </nav>
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <div role="tablist" class="tabs tabs-border">
+        <a role="tab" class="tab tab-active" data-tab="home">Home</a>
+        <a role="tab" class="tab" data-tab="features">Features</a>
+        <a role="tab" class="tab" data-tab="premium">Premium</a>
+      </div>
+    </div>
 
     <!-- Home Tab -->
-    <section class="tab-content active" id="tab-home">
-      <div class="status-card">
-        <div class="status-row">
-          <span class="status-label">Extension</span>
-          <label class="mini-toggle">
-            <input type="checkbox" id="master-toggle" checked>
-            <span class="mini-toggle-slider"></span>
-          </label>
-        </div>
-        <div class="status-row">
-          <span class="status-label">Account</span>
-          <span class="status-value" id="status-account">Not linked</span>
-        </div>
-        <div class="status-row">
-          <span class="status-label">Subscription</span>
-          <span class="status-value" id="status-tier">BtrKorone Free</span>
-        </div>
-        <div class="status-row">
-          <span class="status-label">Last Verified</span>
-          <span class="status-value" id="status-verified">Never</span>
+    <section class="tab-panel active" id="tab-home">
+      <div class="card bg-base-200 shadow-sm">
+        <div class="card-body p-compact">
+          <div class="stat-row">
+            <span class="stat-label">Extension</span>
+            <input type="checkbox" class="toggle toggle-sm toggle-primary" id="master-toggle" checked>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Account</span>
+            <span class="stat-value" id="status-account">Not linked</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Subscription</span>
+            <span class="stat-value" id="status-tier">Free</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Last Verified</span>
+            <span class="stat-value" id="status-verified">Never</span>
+          </div>
         </div>
       </div>
 
-      <!-- Quick Feature Summary -->
-      <div class="feature-summary">
-        <h3>Active Features</h3>
-        <div class="feature-pills" id="feature-pills"></div>
+      <div class="feature-pills-section">
+        <span class="section-label">Active Features</span>
+        <div class="pills" id="feature-pills"></div>
       </div>
 
-      <button class="btn btn-secondary" id="btn-recheck" style="display:none;">
-        Re-check Subscription
-      </button>
+      <button class="btn btn-sm btn-outline btn-block" id="btn-recheck" style="display:none;">Re-check Subscription</button>
     </section>
 
-    <!-- Features Tab (Toggle System) -->
-    <section class="tab-content" id="tab-features">
-      <div class="features-list" id="features-list">
-        <!-- Dynamically generated from FEATURE_REGISTRY -->
-      </div>
+    <!-- Features Tab -->
+    <section class="tab-panel" id="tab-features">
+      <div id="features-list"></div>
     </section>
 
     <!-- Premium Tab -->
-    <section class="tab-content" id="tab-premium">
-      <!-- Tier Comparison -->
-      <div class="tier-cards">
-        <div class="tier-card tier-plus-card">
-          <div class="tier-card-header">
-            <h3>BtrKorone+</h3>
-            <span class="tier-price-tag">Robux Gamepass</span>
+    <section class="tab-panel" id="tab-premium">
+      <!-- Tier Cards -->
+      <div class="tier-grid">
+        <div class="card bg-base-200 tier-card-plus">
+          <div class="card-body p-compact">
+            <h3 class="tier-title-plus">BtrKorone+</h3>
+            <span class="badge badge-xs badge-ghost">Robux Gamepass</span>
+            <ul class="tier-list">
+              <li>Trade enhancements & overlay</li>
+              <li>Dark mode override</li>
+              <li>Profile enhancements</li>
+              <li>Catalog filters</li>
+              <li>Premium badge</li>
+            </ul>
           </div>
-          <ul class="tier-features-list">
-            <li>Trade enhancements & overlay</li>
-            <li>Dark mode override</li>
-            <li>Profile enhancements</li>
-            <li>Catalog filters</li>
-            <li>Premium badge</li>
-          </ul>
         </div>
-        <div class="tier-card tier-rex-card">
-          <div class="tier-card-header">
-            <h3>BtrKorone Rex</h3>
-            <span class="tier-price-tag">Robux Gamepass</span>
+        <div class="card bg-base-200 tier-card-rex">
+          <div class="card-body p-compact">
+            <h3 class="tier-title-rex">BtrKorone Rex</h3>
+            <span class="badge badge-xs badge-ghost">Robux Gamepass</span>
+            <ul class="tier-list">
+              <li>All Plus features</li>
+              <li>Item value estimates</li>
+              <li>Trade calculator</li>
+              <li>Server size indicator</li>
+              <li>Friend activity feed</li>
+            </ul>
           </div>
-          <ul class="tier-features-list">
-            <li>All BtrKorone+ features</li>
-            <li>Item value estimates</li>
-            <li>Advanced trade calculator</li>
-            <li>Server size indicator</li>
-            <li>Friend activity feed</li>
-            <li>Notifications popup</li>
-          </ul>
         </div>
       </div>
 
-      <!-- Verification Flow -->
-      <div class="verification-section">
-        <h3>Link & Verify</h3>
-        <p class="help-text">Enter your Korone User ID (from your profile URL), generate a token, paste it in your <strong>Korone About Me</strong>, then verify.</p>
+      <!-- Verification -->
+      <div class="card bg-base-200">
+        <div class="card-body p-compact">
+          <h3 class="card-title text-sm">Link & Verify</h3>
+          <p class="help-text">Enter your Korone User ID (from your profile URL), generate a token, paste it in your <strong>About Me</strong>, then verify.</p>
 
-        <div class="form-group">
-          <label for="input-userid">Korone User ID</label>
-          <input type="text" id="input-userid" placeholder="e.g. 12345" autocomplete="off" />
-        </div>
+          <label class="label label-text text-xs">Korone User ID</label>
+          <input type="text" id="input-userid" placeholder="e.g. 42770" class="input input-sm input-bordered w-full">
 
-        <button class="btn btn-primary" id="btn-generate-token">
-          Generate Verification Token
-        </button>
+          <button class="btn btn-sm btn-primary btn-block mt-2" id="btn-generate-token">Generate Verification Token</button>
 
-        <div class="token-display" id="token-display" style="display:none;">
-          <p class="help-text">Paste this into your <strong>Korone About Me</strong> section:</p>
-          <div class="token-row">
-            <code class="token-code" id="token-value"></code>
-            <button class="btn btn-copy" id="btn-copy-token">Copy</button>
+          <div class="token-display" id="token-display" style="display:none;">
+            <p class="help-text">Paste this into your <strong>Korone About Me</strong>:</p>
+            <div class="token-row">
+              <code class="token-code" id="token-value"></code>
+              <button class="btn btn-xs btn-ghost" id="btn-copy-token">Copy</button>
+            </div>
           </div>
+
+          <button class="btn btn-sm btn-success btn-block mt-2" id="btn-verify" style="display:none;">Verify Ownership</button>
+
+          <div class="alert alert-sm mt-2" id="verification-message" style="display:none;"></div>
         </div>
-
-        <button class="btn btn-success" id="btn-verify" style="display:none;">
-          Verify Ownership
-        </button>
-
-        <div class="message" id="verification-message" style="display:none;"></div>
       </div>
 
-      <!-- Unlink -->
-      <button class="btn btn-danger" id="btn-logout" style="display:none;">
-        Unlink Account
-      </button>
+      <button class="btn btn-sm btn-error btn-outline btn-block mt-2" id="btn-logout" style="display:none;">Unlink Account</button>
     </section>
 
     <!-- Footer -->
     <footer class="popup-footer">
-      <span>BtrKorone v<span id="version">2.0.0</span></span>
-      <span class="footer-sep">&bull;</span>
-      <a href="https://www.korone.live" target="_blank">Korone</a>
+      <span>BtrKorone v<span id="version">2.1.0</span></span>
+      <span class="footer-sep">·</span>
+      <a href="https://www.pekora.zip" target="_blank" class="link link-primary text-xs">Korone</a>
     </footer>
   </div>
 

@@ -25,7 +25,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.korone.live/*"],
+      "matches": ["*://*.korone.live/*", "*://*.pekora.zip/*"],
       "js": [
         "shared/constants.js",
         "shared/storage.js",
@@ -57,7 +57,7 @@
   "web_accessible_resources": [
     {
       "resources": ["content/styles/*", "icons/*"],
-      "matches": ["*://*.korone.live/*"]
+      "matches": ["*://*.korone.live/*", "*://*.pekora.zip/*"]
     }
   ]
 }
