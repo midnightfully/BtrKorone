@@ -87,8 +87,6 @@ const BTRKORONE = {
   FEATURE_REGISTRY: [
     // === FREE TIER FEATURES ===
     { id: "playButton", name: "Play Button", description: "Adds a play button to game pages that launches games instantly", tier: 0, category: "games", defaultEnabled: true },
-    { id: "quickNavigation", name: "Quick Navigation", description: "Sticky nav bar with keyboard shortcuts (Alt+key)", tier: 0, category: "navigation", defaultEnabled: true },
-    { id: "compactMode", name: "Compact Mode", description: "Reduce spacing for information-dense browsing", tier: 0, category: "ui", defaultEnabled: false },
 
     // === PLUS TIER FEATURES ===
     { id: "tradeEnhancements", name: "Trade Enhancements", description: "Value indicators, trade summaries, and fairness display", tier: 1, category: "trading", defaultEnabled: true },

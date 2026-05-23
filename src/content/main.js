@@ -61,9 +61,6 @@
   document.body.classList.add("btrkorone-active");
   document.body.dataset.btrkoroneTier = currentTier;
 
-  if (activeFeatures.includes("compactMode")) {
-    document.body.classList.add("btrkorone-compact");
-  }
   if (activeFeatures.includes("darkModeOverride")) {
     document.body.classList.add("btrkorone-dark");
   }
@@ -115,7 +112,6 @@
     window.__btrkorone.activeFeatures = newActive;
 
     // Update body classes
-    document.body.classList.toggle("btrkorone-compact", newActive.includes("compactMode"));
     document.body.classList.toggle("btrkorone-dark", newActive.includes("darkModeOverride"));
   }
 

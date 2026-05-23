@@ -39,8 +39,12 @@ function renderUI() {
   // Username
   document.getElementById("user-name").textContent = s.username || "Not linked";
 
-  // Tier label
+  // Tier label + tier-specific avatar icon
   document.getElementById("tier-label").textContent = s.tierInfo.label;
+  const tierAvatar = document.getElementById("tier-avatar");
+  if (s.tier === 2) tierAvatar.src = "../icons/tier-rex.png";
+  else if (s.tier === 1) tierAvatar.src = "../icons/tier-plus.png";
+  else tierAvatar.src = "../icons/tier-free.png";
 
   // Render features for all 3 tier panels
   renderTierFeatures("free", 0);
