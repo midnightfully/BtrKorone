@@ -8,184 +8,143 @@
 </head>
 <body>
   <div class="popup-container">
-    <!-- Header -->
+    <!-- Header with Avatar -->
     <header class="popup-header">
-      <div class="logo-row">
-        <img src="../icons/icon32.png" alt="BtrKorone" class="logo-icon">
-        <h1>BtrKorone</h1>
-        <span class="version" id="version">v1.0.0</span>
+      <div class="header-left">
+        <div class="avatar-container" id="avatar-container">
+          <img src="../icons/icon32.png" alt="Avatar" class="avatar-img" id="avatar-img">
+          <div class="avatar-tier-ring" id="avatar-tier-ring"></div>
+        </div>
+        <div class="header-info">
+          <h1 id="header-title">BtrKorone</h1>
+          <span class="header-username" id="header-username"></span>
+        </div>
       </div>
       <div class="tier-badge" id="tier-badge">Free</div>
     </header>
 
     <!-- Tab Navigation -->
     <nav class="tab-nav">
-      <button class="tab-btn active" data-tab="status">Status</button>
+      <button class="tab-btn active" data-tab="home">Home</button>
+      <button class="tab-btn" data-tab="features">Features</button>
       <button class="tab-btn" data-tab="premium">Premium</button>
-      <button class="tab-btn" data-tab="settings">Settings</button>
     </nav>
 
-    <!-- Status Tab -->
-    <section class="tab-content active" id="tab-status">
+    <!-- Home Tab -->
+    <section class="tab-content active" id="tab-home">
       <div class="status-card">
         <div class="status-row">
           <span class="status-label">Extension</span>
-          <span class="status-value enabled" id="status-enabled">Enabled</span>
+          <label class="mini-toggle">
+            <input type="checkbox" id="master-toggle" checked>
+            <span class="mini-toggle-slider"></span>
+          </label>
         </div>
         <div class="status-row">
           <span class="status-label">Account</span>
           <span class="status-value" id="status-account">Not linked</span>
         </div>
         <div class="status-row">
-          <span class="status-label">Premium Tier</span>
-          <span class="status-value" id="status-tier">Free</span>
+          <span class="status-label">Subscription</span>
+          <span class="status-value" id="status-tier">BtrKorone Free</span>
         </div>
         <div class="status-row">
           <span class="status-label">Last Verified</span>
           <span class="status-value" id="status-verified">Never</span>
         </div>
       </div>
+
+      <!-- Quick Feature Summary -->
+      <div class="feature-summary">
+        <h3>Active Features</h3>
+        <div class="feature-pills" id="feature-pills"></div>
+      </div>
+
       <button class="btn btn-secondary" id="btn-recheck" style="display:none;">
-        Re-check Premium
+        Re-check Subscription
       </button>
+    </section>
+
+    <!-- Features Tab (Toggle System) -->
+    <section class="tab-content" id="tab-features">
+      <div class="features-list" id="features-list">
+        <!-- Dynamically generated from FEATURE_REGISTRY -->
+      </div>
     </section>
 
     <!-- Premium Tab -->
     <section class="tab-content" id="tab-premium">
       <!-- Tier Comparison -->
       <div class="tier-cards">
-        <div class="tier-card tier-plus">
-          <h3>BtrKorone+</h3>
-          <p class="tier-price">One-time purchase</p>
-          <ul class="tier-features">
-            <li>Trade enhancements</li>
+        <div class="tier-card tier-plus-card">
+          <div class="tier-card-header">
+            <h3>BtrKorone+</h3>
+            <span class="tier-price-tag">Robux Gamepass</span>
+          </div>
+          <ul class="tier-features-list">
+            <li>Trade enhancements & overlay</li>
             <li>Dark mode override</li>
             <li>Profile enhancements</li>
             <li>Catalog filters</li>
+            <li>Premium badge</li>
           </ul>
         </div>
-        <div class="tier-card tier-pro">
-          <h3>BtrKorone Pro</h3>
-          <p class="tier-price">One-time purchase</p>
-          <ul class="tier-features">
+        <div class="tier-card tier-rex-card">
+          <div class="tier-card-header">
+            <h3>BtrKorone Rex</h3>
+            <span class="tier-price-tag">Robux Gamepass</span>
+          </div>
+          <ul class="tier-features-list">
             <li>All BtrKorone+ features</li>
             <li>Item value estimates</li>
-            <li>Notification popup</li>
-            <li>Trade calculator</li>
+            <li>Advanced trade calculator</li>
             <li>Server size indicator</li>
             <li>Friend activity feed</li>
+            <li>Notifications popup</li>
           </ul>
         </div>
       </div>
 
-      <!-- Verification Form -->
+      <!-- Verification Flow -->
       <div class="verification-section">
-        <h3>Verify Premium</h3>
-        <p class="help-text">Link your Roblox account to verify gamepass ownership.</p>
-        
+        <h3>Link & Verify</h3>
+        <p class="help-text">Enter your Roblox User ID, generate a token, paste it in your <strong>Korone About Me</strong>, then verify.</p>
+
         <div class="form-group">
           <label for="input-userid">Roblox User ID</label>
-          <input type="text" id="input-userid" placeholder="e.g. 12345678" />
+          <input type="text" id="input-userid" placeholder="e.g. 12345678" autocomplete="off" />
         </div>
 
         <button class="btn btn-primary" id="btn-generate-token">
-          Generate Token
+          Generate Verification Token
         </button>
 
         <div class="token-display" id="token-display" style="display:none;">
-          <p class="help-text">Place this token in your Roblox profile description:</p>
-          <code class="token-code" id="token-value"></code>
-          <button class="btn btn-copy" id="btn-copy-token">Copy</button>
+          <p class="help-text">Paste this into your <strong>Korone About Me</strong> section:</p>
+          <div class="token-row">
+            <code class="token-code" id="token-value"></code>
+            <button class="btn btn-copy" id="btn-copy-token">Copy</button>
+          </div>
         </div>
 
         <button class="btn btn-success" id="btn-verify" style="display:none;">
-          Verify & Activate
+          Verify Ownership
         </button>
 
         <div class="message" id="verification-message" style="display:none;"></div>
       </div>
 
-      <!-- Logout -->
+      <!-- Unlink -->
       <button class="btn btn-danger" id="btn-logout" style="display:none;">
         Unlink Account
       </button>
     </section>
 
-    <!-- Settings Tab -->
-    <section class="tab-content" id="tab-settings">
-      <div class="settings-group">
-        <h3>General</h3>
-        <label class="toggle-row">
-          <span>Enable BtrKorone</span>
-          <input type="checkbox" id="setting-enabled" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>UI Enhancements</span>
-          <input type="checkbox" id="setting-uiEnhancements" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>Quick Navigation</span>
-          <input type="checkbox" id="setting-quickNavigation" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>Compact Mode</span>
-          <input type="checkbox" id="setting-compactMode">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="settings-group">
-        <h3>Premium Features <span class="premium-lock" id="plus-lock">+</span></h3>
-        <label class="toggle-row">
-          <span>Trade Enhancements</span>
-          <input type="checkbox" id="setting-tradeEnhancements" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>Dark Mode Override</span>
-          <input type="checkbox" id="setting-darkModeOverride">
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>Profile Enhancements</span>
-          <input type="checkbox" id="setting-profileEnhancements" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>Catalog Filters</span>
-          <input type="checkbox" id="setting-catalogFilters" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <div class="settings-group">
-        <h3>Pro Features <span class="premium-lock" id="pro-lock">PRO</span></h3>
-        <label class="toggle-row">
-          <span>Item Value Estimates</span>
-          <input type="checkbox" id="setting-itemValueEstimates" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>Notification Popup</span>
-          <input type="checkbox" id="setting-notificationsPopup" checked>
-          <span class="toggle-slider"></span>
-        </label>
-        <label class="toggle-row">
-          <span>Show Premium Badge</span>
-          <input type="checkbox" id="setting-showPremiumBadge" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-    </section>
-
     <!-- Footer -->
     <footer class="popup-footer">
+      <span>BtrKorone v<span id="version">2.0.0</span></span>
+      <span class="footer-sep">&bull;</span>
       <a href="https://www.korone.live" target="_blank">Korone</a>
-      <span>&bull;</span>
-      <a href="https://github.com/midnightfully/BtrKorone" target="_blank">GitHub</a>
     </footer>
   </div>
 

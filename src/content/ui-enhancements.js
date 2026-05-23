@@ -1,104 +1,97 @@
 /**
  * BtrKorone - UI Enhancements
- * Modernizes and cleans up the Korone website layout
+ * Modernizes layout, enhances cards, adds premium badges, profile improvements
+ * Play button logic is handled in main.js for immediate injection
  */
 
 (function BtrUIEnhancements() {
   "use strict";
 
-  // Wait for main script to initialize
   const waitForInit = setInterval(() => {
     if (!window.__btrkorone) return;
     clearInterval(waitForInit);
 
-    const { hasFeature, settings, tier } = window.__btrkorone;
-    if (!settings.uiEnhancements) return;
+    const { hasFeature } = window.__btrkorone;
+    if (!hasFeature("uiEnhancements")) return;
 
     init();
-  }, 100);
+  }, 50);
 
   function init() {
     enhanceNavbar();
-    enhanceFooter();
     enhanceCards();
     enhanceProfilePage();
     addPremiumBadges();
 
-    // Observe DOM changes for dynamically loaded content
+    // Observe DOM for dynamically loaded content
     const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (mutation.addedNodes.length > 0) {
-          enhanceCards();
-          addPremiumBadges();
-        }
+      let hasNew = false;
+      for (const m of mutations) {
+        if (m.addedNodes.length > 0) { hasNew = true; break; }
+      }
+      if (hasNew) {
+        enhanceCards();
+        addPremiumBadges();
       }
     });
-
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
   /**
-   * Enhance the main navigation bar
+   * Enhance the main navigation bar with BtrKorone indicator
    */
   function enhanceNavbar() {
-    const navbar = document.querySelector(".navbar, nav, #navigation");
-    if (!navbar) return;
+    const navbar = document.querySelector(".navbar, nav, #navigation, .nav-container");
+    if (!navbar || navbar.querySelector(".btrkorone-indicator")) return;
 
     navbar.classList.add("btrkorone-navbar");
 
-    // Add BtrKorone indicator
     const indicator = document.createElement("div");
     indicator.className = "btrkorone-indicator";
-    indicator.innerHTML = `<span class="btrkorone-dot"></span>`;
+    indicator.innerHTML = '<span class="btrkorone-dot"></span>';
     indicator.title = "BtrKorone Active";
-    navbar.appendChild(indicator);
+    document.body.appendChild(indicator);
   }
 
   /**
-   * Clean up the footer
-   */
-  function enhanceFooter() {
-    const footer = document.querySelector("footer, .footer, #footer");
-    if (!footer) return;
-
-    footer.classList.add("btrkorone-footer");
-  }
-
-  /**
-   * Enhance item/game cards with better hover effects and info display
+   * Enhance item/game cards with hover effects
    */
   function enhanceCards() {
     const cards = document.querySelectorAll(
-      ".item-card:not(.btrk-enhanced), .game-card:not(.btrk-enhanced), .catalog-item:not(.btrk-enhanced)"
+      ".item-card:not(.btrk-enhanced), " +
+      ".game-card:not(.btrk-enhanced), " +
+      ".catalog-item:not(.btrk-enhanced), " +
+      ".game-item:not(.btrk-enhanced), " +
+      ".asset-card:not(.btrk-enhanced)"
     );
 
     cards.forEach((card) => {
-      card.classList.add("btrk-enhanced");
-      card.classList.add("btrkorone-card");
+      card.classList.add("btrk-enhanced", "btrkorone-card");
     });
   }
 
   /**
-   * Enhance user profile pages
+   * Profile page enhancements (Plus+ feature)
    */
   function enhanceProfilePage() {
-    if (!window.location.pathname.match(/\/users?\/\d+/i) && 
-        !window.location.pathname.includes("/profile")) return;
-
-    const { hasFeature, tier } = window.__btrkorone;
+    const { hasFeature } = window.__btrkorone;
     if (!hasFeature("profileEnhancements")) return;
 
+    const isProfilePage = window.location.pathname.match(/\/users?\/\d+/i) ||
+                          window.location.pathname.includes("/profile");
+    if (!isProfilePage) return;
+
     const profileHeader = document.querySelector(
-      ".profile-header, .user-header, #profile-header"
+      ".profile-header, .user-header, #profile-header, .profile-container"
     );
-    if (!profileHeader) return;
+    if (!profileHeader || profileHeader.classList.contains("btrk-profile-enhanced")) return;
 
-    profileHeader.classList.add("btrkorone-profile-header");
+    profileHeader.classList.add("btrk-profile-enhanced", "btrkorone-profile-header");
 
-    // Add join date formatting enhancement
-    const joinDate = profileHeader.querySelector(".join-date, .created-date");
+    // Enhance join date display
+    const joinDate = profileHeader.querySelector(".join-date, .created-date, .member-since");
     if (joinDate) {
-      const dateText = joinDate.textContent;
+      const dateText = joinDate.textContent.trim();
       const parsed = new Date(dateText);
       if (!isNaN(parsed)) {
         joinDate.title = parsed.toLocaleDateString("en-US", {
@@ -107,23 +100,43 @@
           month: "long",
           day: "numeric"
         });
+        joinDate.classList.add("btrkorone-date-enhanced");
+      }
+    }
+
+    // Add account age display
+    const createdEl = profileHeader.querySelector("[data-created], .created-date");
+    if (createdEl) {
+      const created = new Date(createdEl.dataset.created || createdEl.textContent);
+      if (!isNaN(created)) {
+        const days = Math.floor((Date.now() - created) / 86400000);
+        const ageTag = document.createElement("span");
+        ageTag.className = "btrkorone-account-age";
+        if (days < 365) {
+          ageTag.textContent = `${days}d old`;
+        } else {
+          ageTag.textContent = `${Math.floor(days / 365)}y ${days % 365}d old`;
+        }
+        createdEl.parentNode.insertBefore(ageTag, createdEl.nextSibling);
       }
     }
   }
 
   /**
-   * Add premium tier badges next to usernames (if they have BtrKorone premium)
+   * Add premium tier badges next to own username
    */
   function addPremiumBadges() {
-    const { settings, tier } = window.__btrkorone;
-    if (!settings.showPremiumBadge || tier === 0) return;
+    const { hasFeature, tier } = window.__btrkorone;
+    if (!hasFeature("showPremiumBadge") || tier === 0) return;
 
-    // Add badge to own username displays
     const usernameElements = document.querySelectorAll(
-      ".current-user-name:not(.btrk-badged), .header-username:not(.btrk-badged)"
+      ".current-user-name:not(.btrk-badged), " +
+      ".header-username:not(.btrk-badged), " +
+      ".authenticated-user-name:not(.btrk-badged), " +
+      ".navbar-username:not(.btrk-badged)"
     );
 
-    const tierInfo = tier === 2 ? BTRKORONE.TIERS.PRO : BTRKORONE.TIERS.PLUS;
+    const tierInfo = tier === 2 ? BTRKORONE.TIERS.REX : BTRKORONE.TIERS.PLUS;
 
     usernameElements.forEach((el) => {
       el.classList.add("btrk-badged");

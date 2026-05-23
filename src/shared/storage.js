@@ -1,12 +1,11 @@
 /**
  * BtrKorone - Storage Utilities
- * Wrapper around chrome.storage.local for consistent data management
+ * Wrapper around chrome.storage.local with feature toggle persistence and avatar caching
  */
 
 const BtrStorage = {
-  /**
-   * Get a value from storage
-   */
+  // === Core Storage Operations ===
+
   async get(key) {
     return new Promise((resolve) => {
       chrome.storage.local.get(key, (result) => {
@@ -15,9 +14,6 @@ const BtrStorage = {
     });
   },
 
-  /**
-   * Get multiple values from storage
-   */
   async getMultiple(keys) {
     return new Promise((resolve) => {
       chrome.storage.local.get(keys, (result) => {
@@ -26,43 +22,31 @@ const BtrStorage = {
     });
   },
 
-  /**
-   * Set a value in storage
-   */
   async set(key, value) {
     return new Promise((resolve) => {
       chrome.storage.local.set({ [key]: value }, resolve);
     });
   },
 
-  /**
-   * Set multiple values in storage
-   */
   async setMultiple(obj) {
     return new Promise((resolve) => {
       chrome.storage.local.set(obj, resolve);
     });
   },
 
-  /**
-   * Remove a key from storage
-   */
   async remove(key) {
     return new Promise((resolve) => {
       chrome.storage.local.remove(key, resolve);
     });
   },
 
-  /**
-   * Clear all extension storage
-   */
   async clear() {
     return new Promise((resolve) => {
       chrome.storage.local.clear(resolve);
     });
   },
 
-  // --- Convenience methods ---
+  // === User Identity ===
 
   async getUserId() {
     return this.get(BTRKORONE.STORAGE_KEYS.USER_ID);
@@ -71,6 +55,34 @@ const BtrStorage = {
   async setUserId(userId) {
     return this.set(BTRKORONE.STORAGE_KEYS.USER_ID, userId);
   },
+
+  async getKoroneUserId() {
+    return this.get(BTRKORONE.STORAGE_KEYS.KORONE_USER_ID);
+  },
+
+  async setKoroneUserId(id) {
+    return this.set(BTRKORONE.STORAGE_KEYS.KORONE_USER_ID, id);
+  },
+
+  async getCachedUsername() {
+    return this.get(BTRKORONE.STORAGE_KEYS.CACHED_USERNAME);
+  },
+
+  async setCachedUsername(username) {
+    return this.set(BTRKORONE.STORAGE_KEYS.CACHED_USERNAME, username);
+  },
+
+  // === Avatar Caching ===
+
+  async getCachedAvatarUrl() {
+    return this.get(BTRKORONE.STORAGE_KEYS.CACHED_AVATAR_URL);
+  },
+
+  async setCachedAvatarUrl(url) {
+    return this.set(BTRKORONE.STORAGE_KEYS.CACHED_AVATAR_URL, url);
+  },
+
+  // === Premium Tier ===
 
   async getPremiumTier() {
     const tier = await this.get(BTRKORONE.STORAGE_KEYS.PREMIUM_TIER);
@@ -89,6 +101,16 @@ const BtrStorage = {
     return this.set(BTRKORONE.STORAGE_KEYS.PREMIUM_TOKEN, token);
   },
 
+  async getVerificationTimestamp() {
+    return this.get(BTRKORONE.STORAGE_KEYS.VERIFICATION_TIMESTAMP);
+  },
+
+  async setVerificationTimestamp(ts) {
+    return this.set(BTRKORONE.STORAGE_KEYS.VERIFICATION_TIMESTAMP, ts);
+  },
+
+  // === Extension-Level Settings ===
+
   async getSettings() {
     const settings = await this.get(BTRKORONE.STORAGE_KEYS.SETTINGS);
     return { ...BTRKORONE.DEFAULT_SETTINGS, ...(settings || {}) };
@@ -100,20 +122,92 @@ const BtrStorage = {
     return this.set(BTRKORONE.STORAGE_KEYS.SETTINGS, merged);
   },
 
-  async getVerificationTimestamp() {
-    return this.get(BTRKORONE.STORAGE_KEYS.VERIFICATION_TIMESTAMP);
+  // === Feature Toggle System ===
+
+  /**
+   * Get all feature toggle states (merged with defaults)
+   */
+  async getFeatureToggles() {
+    const saved = await this.get(BTRKORONE.STORAGE_KEYS.FEATURE_TOGGLES);
+    return { ...BTRKORONE.DEFAULT_FEATURE_TOGGLES, ...(saved || {}) };
   },
 
-  async setVerificationTimestamp(ts) {
-    return this.set(BTRKORONE.STORAGE_KEYS.VERIFICATION_TIMESTAMP, ts);
+  /**
+   * Set a single feature toggle
+   */
+  async setFeatureToggle(featureId, enabled) {
+    const toggles = await this.getFeatureToggles();
+    toggles[featureId] = enabled;
+    return this.set(BTRKORONE.STORAGE_KEYS.FEATURE_TOGGLES, toggles);
   },
 
-  async getCachedUsername() {
-    return this.get(BTRKORONE.STORAGE_KEYS.CACHED_USERNAME);
+  /**
+   * Set multiple feature toggles at once
+   */
+  async setFeatureToggles(toggleMap) {
+    const toggles = await this.getFeatureToggles();
+    Object.assign(toggles, toggleMap);
+    return this.set(BTRKORONE.STORAGE_KEYS.FEATURE_TOGGLES, toggles);
   },
 
-  async setCachedUsername(username) {
-    return this.set(BTRKORONE.STORAGE_KEYS.CACHED_USERNAME, username);
+  /**
+   * Check if a specific feature is enabled AND accessible at the user's tier
+   */
+  async isFeatureActive(featureId) {
+    const tier = await this.getPremiumTier();
+    const toggles = await this.getFeatureToggles();
+    const isAccessible = BTRKORONE.isFeatureAccessible(featureId, tier);
+    const isEnabled = toggles[featureId] !== false;
+    return isAccessible && isEnabled;
+  },
+
+  /**
+   * Get full feature state map: { featureId: { enabled, accessible, meta } }
+   */
+  async getFullFeatureState() {
+    const tier = await this.getPremiumTier();
+    const toggles = await this.getFeatureToggles();
+    const state = {};
+
+    BTRKORONE.FEATURE_REGISTRY.forEach(feature => {
+      state[feature.id] = {
+        enabled: toggles[feature.id] !== false,
+        accessible: tier >= feature.tier,
+        active: (toggles[feature.id] !== false) && (tier >= feature.tier),
+        meta: feature
+      };
+    });
+
+    return state;
+  },
+
+  // === Bulk State Retrieval (for popup/content scripts) ===
+
+  /**
+   * Get everything needed for full extension status in one call
+   */
+  async getFullStatus() {
+    const keys = Object.values(BTRKORONE.STORAGE_KEYS);
+    const data = await this.getMultiple(keys);
+
+    const tier = data[BTRKORONE.STORAGE_KEYS.PREMIUM_TIER] ?? BTRKORONE.TIERS.FREE.id;
+    const settings = { ...BTRKORONE.DEFAULT_SETTINGS, ...(data[BTRKORONE.STORAGE_KEYS.SETTINGS] || {}) };
+    const toggles = { ...BTRKORONE.DEFAULT_FEATURE_TOGGLES, ...(data[BTRKORONE.STORAGE_KEYS.FEATURE_TOGGLES] || {}) };
+
+    const tierInfo = Object.values(BTRKORONE.TIERS).find(t => t.id === tier) || BTRKORONE.TIERS.FREE;
+
+    return {
+      userId: data[BTRKORONE.STORAGE_KEYS.USER_ID] || null,
+      koroneUserId: data[BTRKORONE.STORAGE_KEYS.KORONE_USER_ID] || null,
+      username: data[BTRKORONE.STORAGE_KEYS.CACHED_USERNAME] || null,
+      avatarUrl: data[BTRKORONE.STORAGE_KEYS.CACHED_AVATAR_URL] || null,
+      tier,
+      tierInfo,
+      settings,
+      toggles,
+      lastVerified: data[BTRKORONE.STORAGE_KEYS.VERIFICATION_TIMESTAMP] || null,
+      version: BTRKORONE.VERSION
+    };
   }
 };
 

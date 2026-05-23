@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "BtrKorone",
-  "version": "1.0.0",
-  "description": "Enhances the Korone Roblox revival experience with UI improvements, quick navigation, and premium features verified through Roblox gamepass ownership.",
+  "version": "2.0.0",
+  "description": "Enhances the Korone Roblox revival experience with premium features, play button, trade overlay, and modular feature toggles verified through Roblox gamepass ownership.",
   "author": "BtrKorone Community",
   "permissions": [
     "storage",
@@ -11,11 +11,15 @@
   ],
   "host_permissions": [
     "*://*.korone.live/*",
-    "*://*.roblox.com/*"
+    "*://api.korone.live/*",
+    "*://economy.korone.live/*",
+    "*://*.roblox.com/*",
+    "*://thumbnails.roblox.com/*",
+    "*://inventory.roblox.com/*",
+    "*://users.roblox.com/*"
   ],
   "background": {
-    "service_worker": "background/service-worker.js",
-    "type": "module"
+    "service_worker": "background/service-worker.js"
   },
   "content_scripts": [
     {
@@ -29,7 +33,7 @@
         "content/premium-features.js"
       ],
       "css": ["content/styles/btrkorone.css"],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     }
   ],
   "action": {
