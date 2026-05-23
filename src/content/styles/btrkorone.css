@@ -831,3 +831,308 @@ body.btrkorone-dark .container-main {
   color: var(--btrk-gold, #ffd700);
   font-weight: 600;
 }
+
+
+
+/* ============================================================
+   TRADE OVERLAY (API-DRIVEN)
+   ============================================================ */
+
+.btrkorone-trade-overlay {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 320px;
+  background: #1a1a1f;
+  border: 1px solid #2a2a30;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 99998;
+  font-family: -apple-system, sans-serif;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+
+.btrk-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #2a2a30;
+  border-radius: 8px 8px 0 0;
+  user-select: none;
+}
+
+.btrk-overlay-title {
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.btrk-overlay-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #fff;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.btrk-overlay-toggle:hover { background: rgba(255, 255, 255, 0.2); }
+
+.btrk-overlay-body {
+  padding: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.btrk-overlay-section h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #888;
+  margin: 0 0 6px 0;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.btrk-overlay-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.btrk-overlay-empty {
+  color: #555;
+  font-style: italic;
+  font-size: 11px;
+}
+
+.btrk-overlay-item-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.btrk-overlay-item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ddd;
+}
+
+.btrk-overlay-item-value {
+  color: #4fc3f7;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.btrk-overlay-item-rap {
+  color: #888;
+  font-size: 10px;
+  font-style: italic;
+}
+
+.btrk-overlay-total {
+  text-align: right;
+  font-size: 12px;
+  color: #aaa;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid #2a2a30;
+}
+
+.btrk-overlay-total span {
+  color: #4fc3f7;
+  font-weight: 700;
+}
+
+.btrk-overlay-divider {
+  height: 8px;
+}
+
+.btrk-overlay-verdict {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #888;
+}
+
+.btrk-verdict-profit {
+  background: rgba(34, 197, 94, 0.15) !important;
+  color: #4ade80 !important;
+}
+
+.btrk-verdict-loss {
+  background: rgba(244, 67, 54, 0.15) !important;
+  color: #f87171 !important;
+}
+
+.btrk-verdict-even {
+  background: rgba(255, 215, 0, 0.15) !important;
+  color: #ffd700 !important;
+}
+
+.btrk-demand-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   TRADE TABLE ROW VALUE COLUMN
+   ============================================================ */
+
+.btrk-trade-value-cell {
+  padding: 4px 8px !important;
+}
+
+.btrk-trade-value-summary {
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.btrk-trade-value-summary.btrk-verdict-profit { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+.btrk-trade-value-summary.btrk-verdict-loss { background: rgba(244, 67, 54, 0.15); color: #f87171; }
+.btrk-trade-value-summary.btrk-verdict-even { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
+
+.btrk-trade-vs {
+  font-size: 10px;
+  opacity: 0.85;
+  font-weight: 500;
+}
+
+.btrk-trade-diff {
+  font-weight: 700;
+  font-size: 11px;
+}
+
+/* ============================================================
+   FLOATING TRADE CALCULATOR (Rex)
+   ============================================================ */
+
+.btrkorone-calc-floating {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 240px;
+  background: #1a1a1f;
+  border: 1px solid #2a2a30;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 99997;
+  font-family: -apple-system, sans-serif;
+  color: #e0e0e0;
+}
+
+.btrkorone-calc-floating .btrk-calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #2a2a30;
+  border-radius: 8px 8px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.btrkorone-calc-floating .btrk-calc-badge {
+  background: #ffd700;
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.btrkorone-calc-floating .btrk-calc-body {
+  padding: 12px;
+}
+
+.btrkorone-calc-floating .btrk-calc-row {
+  margin-bottom: 8px;
+}
+
+.btrkorone-calc-floating .btrk-calc-row label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.btrkorone-calc-floating .btrk-calc-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: #0a0a0d;
+  border: 1px solid #2a2a30;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+
+.btrkorone-calc-floating .btrk-calc-input:focus { border-color: #4fc3f7; }
+
+.btrkorone-calc-floating .btrk-calc-result {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  color: #aaa;
+}
+
+.btrkorone-calc-floating .btrk-calc-profit { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+.btrkorone-calc-floating .btrk-calc-loss { background: rgba(244, 67, 54, 0.15); color: #f87171; }
+.btrkorone-calc-floating .btrk-calc-even { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
+
+/* ============================================================
+   MODAL ITEM VALUE TAGS
+   ============================================================ */
+
+.btrkorone-value-tag {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+}
+
+.btrkorone-value-tag.btrk-valued-live {
+  background: rgba(79, 195, 247, 0.95);
+  color: #000;
+}
+
+.btrkorone-value-tag.btrk-no-value {
+  background: rgba(0, 0, 0, 0.7);
+  color: #aaa;
+  font-style: italic;
+}

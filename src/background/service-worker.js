@@ -8,7 +8,8 @@ importScripts(
   "../shared/constants.js",
   "../shared/storage.js",
   "../shared/premium-verifier.js",
-  "../shared/koromons-api.js"
+  "../shared/koromons-api.js",
+  "../shared/pekora-api.js"
 );
 
 // === Extension Install / Update ===
