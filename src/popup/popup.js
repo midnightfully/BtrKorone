@@ -1,6 +1,6 @@
 /**
- * BtrKorone - Popup Script
- * Handles UI rendering, feature toggles, premium verification, avatar display
+ * BtrKorone - Popup Script (DaisyUI version)
+ * Handles UI, feature toggles, premium verification
  */
 
 let currentStatus = null;
@@ -24,119 +24,103 @@ async function loadFullState() {
 function renderUI() {
   const s = currentStatus;
 
-  // Version
   document.getElementById("version").textContent = s.version;
 
-  // Avatar
-  renderAvatar(s.avatarUrl);
+  // Avatar - use Pekora headshot URL directly
+  const img = document.getElementById("avatar-img");
+  if (s.avatarUrl) {
+    img.src = s.avatarUrl;
+  } else if (s.userId) {
+    img.src = `https://www.pekora.zip/headshot-thumbnail/image?userId=${s.userId}&width=150&height=150&format=png`;
+  }
 
-  // Header username
-  const usernameEl = document.getElementById("header-username");
-  usernameEl.textContent = s.username || "";
+  // Username
+  document.getElementById("header-username").textContent = s.username || "";
 
   // Tier badge
-  const tierBadge = document.getElementById("tier-badge");
-  tierBadge.textContent = s.tierInfo.label;
-  tierBadge.className = "tier-badge " + s.tierInfo.cssClass;
-
-  // Avatar ring color
-  const ring = document.getElementById("avatar-tier-ring");
-  ring.style.borderColor = s.tierInfo.color;
+  const badge = document.getElementById("tier-badge");
+  badge.textContent = s.tierInfo.label;
+  badge.className = "badge badge-sm " + s.tierInfo.cssClass;
 
   // Master toggle
   document.getElementById("master-toggle").checked = s.settings.enabled;
 
-  // Status tab
+  // Status
   document.getElementById("status-account").textContent =
     s.username ? `${s.username} (ID: ${s.userId})` : "Not linked";
   document.getElementById("status-tier").textContent = s.tierInfo.label;
-  document.getElementById("status-tier").style.color = s.tierInfo.color;
   document.getElementById("status-verified").textContent =
     s.lastVerified ? formatTimeAgo(s.lastVerified) : "Never";
 
-  // Show/hide buttons
   if (s.userId) {
     document.getElementById("btn-recheck").style.display = "block";
     document.getElementById("btn-logout").style.display = "block";
     document.getElementById("input-userid").value = s.userId;
   }
 
-  // Render feature toggles
   renderFeatureToggles();
-
-  // Render feature pills summary
   renderFeaturePills();
 }
 
-// === Avatar ===
+// === Tabs ===
 
-function renderAvatar(url) {
-  const img = document.getElementById("avatar-img");
-  if (url) {
-    img.src = url;
-    img.classList.add("loaded");
-  } else {
-    img.src = "../icons/icon32.png";
-    img.classList.remove("loaded");
-  }
+function setupTabs() {
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("tab-active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("tab-active");
+      document.getElementById(`tab-${tab.dataset.tab}`).classList.add("active");
+    });
+  });
 }
 
-// === Feature Toggles UI ===
+// === Feature Toggles ===
 
 function renderFeatureToggles() {
   const container = document.getElementById("features-list");
   container.innerHTML = "";
-
   const tier = currentStatus.tier;
   const categories = {};
 
-  // Group features by category
-  BTRKORONE.FEATURE_REGISTRY.forEach(feature => {
-    const cat = feature.category;
-    if (!categories[cat]) categories[cat] = [];
-    categories[cat].push(feature);
+  BTRKORONE.FEATURE_REGISTRY.forEach(f => {
+    if (!categories[f.category]) categories[f.category] = [];
+    categories[f.category].push(f);
   });
 
-  // Render each category
   Object.entries(categories).forEach(([catKey, features]) => {
     const catInfo = BTRKORONE.FEATURE_CATEGORIES[catKey] || { label: catKey };
-
     const group = document.createElement("div");
     group.className = "feature-group";
 
-    const header = document.createElement("h3");
+    const header = document.createElement("div");
     header.className = "feature-group-header";
     header.textContent = catInfo.label;
     group.appendChild(header);
 
     features.forEach(feature => {
-      const state = featureState[feature.id];
+      const state = featureState ? featureState[feature.id] : null;
       const accessible = tier >= feature.tier;
       const enabled = state ? state.enabled : feature.defaultEnabled;
 
-      const row = document.createElement("label");
+      const row = document.createElement("div");
       row.className = "feature-row" + (accessible ? "" : " locked");
 
       const info = document.createElement("div");
       info.className = "feature-info";
 
-      const nameRow = document.createElement("div");
-      nameRow.className = "feature-name-row";
+      const nameEl = document.createElement("div");
+      nameEl.className = "feature-name";
+      nameEl.textContent = feature.name;
 
-      const name = document.createElement("span");
-      name.className = "feature-name";
-      name.textContent = feature.name;
-      nameRow.appendChild(name);
-
-      // Tier badge
       if (feature.tier > 0) {
         const badge = document.createElement("span");
-        badge.className = "feature-tier-badge " + (feature.tier === 1 ? "badge-plus" : "badge-rex");
+        badge.className = "badge badge-xs " + (feature.tier === 1 ? "badge-info" : "badge-warning");
         badge.textContent = feature.tier === 1 ? "+" : "REX";
-        nameRow.appendChild(badge);
+        nameEl.appendChild(badge);
       }
 
-      info.appendChild(nameRow);
+      info.appendChild(nameEl);
 
       const desc = document.createElement("span");
       desc.className = "feature-desc";
@@ -145,34 +129,25 @@ function renderFeatureToggles() {
 
       row.appendChild(info);
 
-      // Toggle switch
-      const toggle = document.createElement("div");
-      toggle.className = "feature-toggle-wrap";
+      const toggleWrap = document.createElement("div");
+      toggleWrap.className = "feature-toggle-wrap";
 
       if (accessible) {
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = enabled;
-        input.dataset.featureId = feature.id;
-        input.addEventListener("change", handleFeatureToggle);
-
-        const slider = document.createElement("span");
-        slider.className = "mini-toggle-slider";
-
-        const label = document.createElement("label");
-        label.className = "mini-toggle";
-        label.appendChild(input);
-        label.appendChild(slider);
-        toggle.appendChild(label);
+        const toggle = document.createElement("input");
+        toggle.type = "checkbox";
+        toggle.className = "toggle toggle-xs toggle-primary";
+        toggle.checked = enabled;
+        toggle.dataset.featureId = feature.id;
+        toggle.addEventListener("change", handleFeatureToggle);
+        toggleWrap.appendChild(toggle);
       } else {
-        const lockIcon = document.createElement("span");
-        lockIcon.className = "lock-icon";
-        lockIcon.textContent = "\uD83D\uDD12";
-        lockIcon.title = `Requires ${feature.tier === 1 ? "BtrKorone+" : "BtrKorone Rex"}`;
-        toggle.appendChild(lockIcon);
+        const lock = document.createElement("span");
+        lock.className = "lock-icon";
+        lock.textContent = "\uD83D\uDD12";
+        toggleWrap.appendChild(lock);
       }
 
-      row.appendChild(toggle);
+      row.appendChild(toggleWrap);
       group.appendChild(row);
     });
 
@@ -184,43 +159,39 @@ async function handleFeatureToggle(e) {
   const featureId = e.target.dataset.featureId;
   const enabled = e.target.checked;
   await sendMessage({ type: "TOGGLE_FEATURE", featureId, enabled });
-  // Update local state
-  if (featureState[featureId]) {
+  if (featureState && featureState[featureId]) {
     featureState[featureId].enabled = enabled;
-    featureState[featureId].active = enabled;
   }
   renderFeaturePills();
 }
 
-// === Feature Pills Summary ===
+// === Feature Pills ===
 
 function renderFeaturePills() {
   const container = document.getElementById("feature-pills");
   container.innerHTML = "";
-
   const tier = currentStatus.tier;
-  let activeCount = 0;
-
-  BTRKORONE.FEATURE_REGISTRY.forEach(feature => {
-    const accessible = tier >= feature.tier;
-    const state = featureState[feature.id];
-    const enabled = state ? state.enabled : feature.defaultEnabled;
-    if (accessible && enabled) activeCount++;
-  });
-
+  let active = 0;
   const total = BTRKORONE.FEATURE_REGISTRY.filter(f => tier >= f.tier).length;
 
+  BTRKORONE.FEATURE_REGISTRY.forEach(f => {
+    if (tier >= f.tier) {
+      const state = featureState ? featureState[f.id] : null;
+      if (state ? state.enabled : f.defaultEnabled) active++;
+    }
+  });
+
   const pill = document.createElement("span");
-  pill.className = "feature-pill";
-  pill.textContent = `${activeCount}/${total} enabled`;
+  pill.className = "badge badge-sm badge-primary badge-outline";
+  pill.textContent = `${active}/${total} enabled`;
   container.appendChild(pill);
 
   if (tier < 2) {
-    const upgradePill = document.createElement("span");
-    upgradePill.className = "feature-pill upgrade-pill";
     const locked = BTRKORONE.FEATURE_REGISTRY.filter(f => f.tier > tier).length;
-    upgradePill.textContent = `${locked} locked`;
-    container.appendChild(upgradePill);
+    const lockPill = document.createElement("span");
+    lockPill.className = "badge badge-sm badge-warning badge-outline";
+    lockPill.textContent = `${locked} locked`;
+    container.appendChild(lockPill);
   }
 }
 
@@ -232,23 +203,7 @@ function setupMasterToggle() {
   });
 }
 
-// === Tab Navigation ===
-
-function setupTabs() {
-  const tabBtns = document.querySelectorAll(".tab-btn");
-  const tabContents = document.querySelectorAll(".tab-content");
-
-  tabBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      tabBtns.forEach((b) => b.classList.remove("active"));
-      tabContents.forEach((t) => t.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
-    });
-  });
-}
-
-// === Premium Verification ===
+// === Verification ===
 
 function setupVerification() {
   const btnGenerate = document.getElementById("btn-generate-token");
@@ -260,30 +215,24 @@ function setupVerification() {
   btnGenerate.addEventListener("click", async () => {
     const userId = document.getElementById("input-userid").value.trim();
     if (!userId || isNaN(userId)) {
-      showMessage("Please enter a valid Korone User ID (the number from your profile URL).", "error");
+      showMessage("Enter a valid Korone User ID (number from your profile URL).", "error");
       return;
     }
 
     btnGenerate.textContent = "Generating...";
     btnGenerate.disabled = true;
-
     const result = await sendMessage({ type: "GENERATE_TOKEN", userId });
-
     btnGenerate.textContent = "Generate Verification Token";
     btnGenerate.disabled = false;
 
-    if (result.error) {
-      showMessage(result.error, "error");
-      return;
-    }
+    if (result.error) { showMessage(result.error, "error"); return; }
 
-    // Update avatar if fetched
-    if (result.avatarUrl) renderAvatar(result.avatarUrl);
-    if (result.username) {
-      document.getElementById("header-username").textContent = result.username;
-    }
+    // Update avatar
+    const img = document.getElementById("avatar-img");
+    img.src = `https://www.pekora.zip/headshot-thumbnail/image?userId=${userId}&width=150&height=150&format=png`;
 
-    // Show token
+    if (result.username) document.getElementById("header-username").textContent = result.username;
+
     document.getElementById("token-display").style.display = "block";
     document.getElementById("token-value").textContent = result.token;
     document.getElementById("btn-verify").style.display = "block";
@@ -301,30 +250,24 @@ function setupVerification() {
   btnVerify.addEventListener("click", async () => {
     const userId = document.getElementById("input-userid").value.trim();
     const token = document.getElementById("token-value").textContent;
-
-    if (!userId || !token) {
-      showMessage("Please generate a token first.", "error");
-      return;
-    }
+    if (!userId || !token) { showMessage("Generate a token first.", "error"); return; }
 
     btnVerify.textContent = "Verifying...";
     btnVerify.disabled = true;
-
     const result = await sendMessage({ type: "VERIFY_PREMIUM", userId, token });
-
     btnVerify.textContent = "Verify Ownership";
     btnVerify.disabled = false;
 
     if (result.success) {
       showMessage(result.message, "success");
-      await loadFullState(); // Full UI refresh
+      await loadFullState();
     } else {
       showMessage(result.message || result.error, "error");
     }
   });
 
   btnLogout.addEventListener("click", async () => {
-    if (confirm("This will unlink your account and remove premium access. Continue?")) {
+    if (confirm("Unlink account and remove premium access?")) {
       await sendMessage({ type: "LOGOUT" });
       showMessage("Account unlinked.", "info");
       await loadFullState();
@@ -343,29 +286,24 @@ function setupVerification() {
 
 // === Helpers ===
 
-function sendMessage(message) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      resolve(response || null);
-    });
-  });
+function sendMessage(msg) {
+  return new Promise(resolve => chrome.runtime.sendMessage(msg, r => resolve(r || null)));
 }
 
 function showMessage(text, type) {
   const el = document.getElementById("verification-message");
   el.textContent = text;
-  el.className = `message ${type}`;
+  el.className = `alert alert-sm mt-2 alert-${type}`;
   el.style.display = "block";
   setTimeout(() => { el.style.display = "none"; }, 10000);
 }
 
-function formatTimeAgo(timestamp) {
-  const diff = Date.now() - timestamp;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
+function formatTimeAgo(ts) {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(diff / 3600000);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
 }

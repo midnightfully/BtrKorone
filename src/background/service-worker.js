@@ -65,10 +65,8 @@ async function performPeriodicRecheck() {
     }
 
     // Refresh avatar on recheck
-    const avatarUrl = await PremiumVerifier.fetchAvatarUrl(userId);
-    if (avatarUrl) {
-      await BtrStorage.setCachedAvatarUrl(avatarUrl);
-    }
+    const avatarUrl = PremiumVerifier.getAvatarUrl(userId);
+    await BtrStorage.setCachedAvatarUrl(avatarUrl);
   } catch (error) {
     console.error("[BtrKorone] Periodic recheck failed:", error);
   }
@@ -152,23 +150,22 @@ async function handleGenerateToken(userId) {
   await BtrStorage.setUserId(userId);
   await BtrStorage.setToken(token);
 
-  // Also fetch and cache avatar immediately
-  const avatarUrl = await PremiumVerifier.fetchAvatarUrl(userId);
-  if (avatarUrl) {
-    await BtrStorage.setCachedAvatarUrl(avatarUrl);
-  }
+  // Avatar URL is public (direct image link, no fetch needed)
+  const avatarUrl = PremiumVerifier.getAvatarUrl(userId);
+  await BtrStorage.setCachedAvatarUrl(avatarUrl);
 
-  // Fetch username from Roblox
-  const profile = await PremiumVerifier.fetchRobloxProfile(userId);
-  if (profile && profile.name) {
-    await BtrStorage.setCachedUsername(profile.name);
+  // Fetch username from Pekora (requires user to be logged in)
+  const profile = await PremiumVerifier.fetchPekoraProfile(userId);
+  const username = profile ? (profile.name || profile.username || profile.displayName) : null;
+  if (username) {
+    await BtrStorage.setCachedUsername(username);
   }
 
   return {
     success: true,
     token,
     avatarUrl,
-    username: profile ? profile.name : null,
+    username,
     instructions: `Place this token in your Korone About Me section: ${token}`
   };
 }
@@ -214,12 +211,9 @@ async function handleFetchAvatar(userId) {
     userId = storedId;
   }
 
-  const avatarUrl = await PremiumVerifier.fetchAvatarUrl(userId);
-  if (avatarUrl) {
-    await BtrStorage.setCachedAvatarUrl(avatarUrl);
-    return { success: true, avatarUrl };
-  }
-  return { error: "Could not fetch avatar" };
+  const avatarUrl = PremiumVerifier.getAvatarUrl(userId);
+  await BtrStorage.setCachedAvatarUrl(avatarUrl);
+  return { success: true, avatarUrl };
 }
 
 // === Logout ===
