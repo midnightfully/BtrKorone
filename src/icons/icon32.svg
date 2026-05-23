@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <circle cx="16" cy="16" r="16" fill="#1a1a2e"/>
+  <circle cx="16" cy="16" r="12" fill="none" stroke="#4fc3f7" stroke-width="2"/>
+  <text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" fill="#4fc3f7" font-family="sans-serif" font-weight="bold" font-size="11">BK</text>
+</svg>

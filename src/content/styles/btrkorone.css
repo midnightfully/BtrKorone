@@ -1,0 +1,370 @@
+/* BtrKorone - Content Script Styles */
+/* Applied to Korone website pages */
+
+/* === Base Active State === */
+body.btrkorone-active {
+  --btrk-accent: #4fc3f7;
+  --btrk-gold: #ffd700;
+  --btrk-green: #4caf50;
+  --btrk-bg-overlay: rgba(0, 0, 0, 0.05);
+}
+
+/* === Indicator Dot === */
+.btrkorone-indicator {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 99999;
+  pointer-events: none;
+}
+
+.btrkorone-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--btrk-green);
+  box-shadow: 0 0 4px var(--btrk-green);
+  animation: btrk-pulse 2s infinite;
+}
+
+
+@keyframes btrk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* === Quick Navigation Bar === */
+.btrkorone-quicknav {
+  background: #1a1a2e;
+  border-bottom: 1px solid #2a2a4a;
+  padding: 4px 0;
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+}
+
+.btrkorone-quicknav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+
+.btrkorone-quicknav-link {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #a0a0b0;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.btrkorone-quicknav-link:hover {
+  color: #fff;
+  background: rgba(79, 195, 247, 0.1);
+}
+
+.btrkorone-quicknav-link.active {
+  color: var(--btrk-accent);
+  background: rgba(79, 195, 247, 0.12);
+  font-weight: 600;
+}
+
+
+/* === Card Enhancements === */
+.btrkorone-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btrkorone-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* === Premium Badge === */
+.btrkorone-premium-badge {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(79, 195, 247, 0.12);
+  vertical-align: middle;
+}
+
+/* === Trade Enhancements === */
+.btrkorone-trade-item {
+  position: relative;
+}
+
+.btrkorone-value-tag {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.75);
+  color: var(--btrk-accent);
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+.btrkorone-trade-summary {
+  margin-top: 12px;
+  padding: 10px;
+  background: #0f3460;
+  border-radius: 6px;
+  border: 1px solid #2a2a4a;
+}
+
+.trade-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+  color: #a0a0b0;
+}
+
+.trade-summary-diff {
+  border-top: 1px solid #2a2a4a;
+  margin-top: 4px;
+  padding-top: 6px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+
+/* === Catalog Filters === */
+.btrkorone-catalog-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #16213e;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.btrk-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #a0a0b0;
+}
+
+.btrk-filter-input {
+  width: 70px;
+  padding: 5px 8px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 12px;
+}
+
+.btrk-filter-select {
+  padding: 5px 8px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 12px;
+}
+
+.btrk-filter-btn {
+  padding: 5px 12px;
+  background: var(--btrk-accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btrk-filter-btn:hover {
+  opacity: 0.9;
+}
+
+.btrk-filter-reset {
+  background: transparent;
+  color: #a0a0b0;
+  border: 1px solid #2a2a4a;
+}
+
+
+/* === Item Value Estimates === */
+.btrkorone-value-estimate {
+  font-size: 10px;
+  color: var(--btrk-gold);
+  padding: 2px 4px;
+  text-align: center;
+}
+
+.btrk-est-label {
+  color: #a0a0b0;
+}
+
+/* === Server Size Indicator === */
+.btrkorone-server-indicator {
+  margin-top: 12px;
+  padding: 10px;
+  background: #16213e;
+  border-radius: 6px;
+}
+
+.btrk-server-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.btrk-server-label {
+  color: #a0a0b0;
+  white-space: nowrap;
+}
+
+.btrk-server-meter {
+  flex: 1;
+  height: 8px;
+  background: #1a1a2e;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.btrk-server-fill {
+  height: 100%;
+  background: var(--btrk-green);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.btrk-server-count {
+  color: #e0e0e0;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* === Friend Activity Feed === */
+.btrkorone-activity-feed {
+  margin-top: 16px;
+  padding: 14px;
+  background: #16213e;
+  border-radius: 8px;
+  border: 1px solid #2a2a4a;
+}
+
+.btrk-feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.btrk-feed-header h3 {
+  font-size: 14px;
+  color: #e0e0e0;
+}
+
+.btrk-feed-refresh {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  color: #a0a0b0;
+  cursor: pointer;
+}
+
+.btrk-feed-empty {
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+  padding: 12px;
+}
+
+
+/* === Notifications Popup (Pro) === */
+.btrkorone-notif-popup {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 10000;
+}
+
+.btrk-notif-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.btrk-notif-header h4 {
+  font-size: 13px;
+  color: #e0e0e0;
+}
+
+.btrk-notif-clear {
+  font-size: 10px;
+  color: #4fc3f7;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.btrk-notif-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+}
+
+/* === Compact Mode === */
+body.btrkorone-compact .btrkorone-quicknav-link {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+body.btrkorone-compact .btrkorone-card {
+  margin-bottom: 4px;
+}
+
+/* === Dark Mode Override === */
+body.btrkorone-dark {
+  background: #0d0d1a !important;
+  color: #e0e0e0 !important;
+}
+
+body.btrkorone-dark .navbar,
+body.btrkorone-dark nav {
+  background: #12122a !important;
+}
+
+body.btrkorone-dark .footer,
+body.btrkorone-dark footer {
+  background: #0a0a18 !important;
+}
+
+/* === Pagination Enhancement === */
+.btrkorone-pagination a {
+  transition: all 0.15s ease;
+}
+
+.btrkorone-pagination a:hover {
+  transform: scale(1.05);
+}
