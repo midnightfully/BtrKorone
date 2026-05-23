@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "BtrKorone",
-  "version": "2.0.0",
-  "description": "Enhances the Korone Roblox revival experience with premium features, play button, trade overlay, and modular feature toggles verified through Roblox gamepass ownership.",
+  "version": "2.2.0",
+  "description": "Enhances the Korone (Pekora) revival site with verified premium tiers, a play button, and a trade modal showing Koromons values and verdict.",
   "author": "BtrKorone Community",
   "permissions": [
     "storage",
@@ -10,14 +10,8 @@
     "alarms"
   ],
   "host_permissions": [
-    "*://*.korone.live/*",
-    "*://api.korone.live/*",
-    "*://economy.korone.live/*",
     "*://*.pekora.zip/*",
-    "*://*.roblox.com/*",
-    "*://thumbnails.roblox.com/*",
-    "*://inventory.roblox.com/*",
-    "*://users.roblox.com/*",
+    "*://*.korone.live/*",
     "*://www.koromons.com/*"
   ],
   "background": {
