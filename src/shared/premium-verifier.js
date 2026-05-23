@@ -77,20 +77,24 @@ const PremiumVerifier = {
     return { verified: hasToken, error: hasToken ? null : "TOKEN_NOT_FOUND" };
   },
 
-  // === Roblox Gamepass Ownership ===
+  // === Pekora Gamepass Ownership ===
 
   async checkGamepassOwnership(userId, gamepassId) {
-    const url = BTRKORONE.ROBLOX_API.INVENTORY
+    const url = BTRKORONE.GAMEPASS_API.INVENTORY
       .replace("{userId}", userId)
       .replace("{gamepassId}", gamepassId);
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: { "Accept": "application/json" }
+      });
       if (!response.ok) {
         if (response.status === 403) return { owned: false, error: "PRIVATE_INVENTORY" };
         throw new Error(`Inventory check failed: ${response.status}`);
       }
       const data = await response.json();
-      return { owned: data.data && data.data.length > 0, error: null };
+      const owned = data.data && data.data.length > 0;
+      return { owned, error: null };
     } catch (error) {
       console.error("[BtrKorone] Gamepass check error:", error);
       return { owned: false, error: error.message };

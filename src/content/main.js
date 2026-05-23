@@ -134,12 +134,16 @@
   // === Play Button Injection ===
 
   function injectPlayButtons() {
-    // Target game cards and game detail pages
+    // Target game cards - broad selectors for Pekora's Roblox-style layout
     const gameCards = document.querySelectorAll(
       ".game-card:not(.btrk-play-injected), " +
       ".game-item:not(.btrk-play-injected), " +
       "[data-game-id]:not(.btrk-play-injected), " +
-      ".game-card-container:not(.btrk-play-injected)"
+      ".game-card-container:not(.btrk-play-injected), " +
+      ".game-card-link:not(.btrk-play-injected), " +
+      ".game-card-thumb-container:not(.btrk-play-injected), " +
+      ".slide-item-container:not(.btrk-play-injected), " +
+      "a[href*='/games/']:not(.btrk-play-injected):not(.btrkorone-quicknav-link)"
     );
 
     gameCards.forEach(card => {
@@ -195,8 +199,8 @@
   }
 
   function launchGame(placeId) {
-    // Navigate to the Korone game play URL
-    const playUrl = `${BTRKORONE.KORONE_BASE_URL}/games/${placeId}/play`;
+    // Navigate to the Pekora game play URL
+    const playUrl = `https://www.pekora.zip/games/${placeId}/play`;
     window.location.href = playUrl;
   }
 
@@ -216,6 +220,13 @@
     // Try the card itself if it's a link
     if (card.tagName === "A" && card.href) {
       const match = card.href.match(/\/games?\/(\d+)/i);
+      if (match) return match[1];
+    }
+
+    // Try parent links
+    const parentLink = card.closest("a[href*='/games/']");
+    if (parentLink) {
+      const match = parentLink.href.match(/\/games?\/(\d+)/i);
       if (match) return match[1];
     }
 
