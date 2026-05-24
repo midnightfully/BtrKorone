@@ -20,6 +20,13 @@
   },
   "content_scripts": [
     {
+      "matches": ["*://*.pekora.zip/*"],
+      "js": ["content/page-spy.js"],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
       "matches": ["*://*.korone.live/*", "*://*.pekora.zip/*"],
       "js": [
         "shared/constants.js",
