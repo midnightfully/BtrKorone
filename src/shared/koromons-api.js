@@ -27,14 +27,13 @@ const KoromonsAPI = {
   _idMap: {},         // itemId → item
   _loaded: false,
 
-  // Badge endpoints have their own short-lived in-memory caches.
-  // Definitions are basically static (a few dozen entries), so we cache
-  // them aggressively (1h). Per-user badge data we cache for 5 minutes
-  // so the section doesn't re-fetch on every minor DOM mutation but
-  // still picks up newly-earned badges quickly.
-  _badgeDefsCache: null,
-  _badgeDefsCacheTs: 0,
-  BADGE_DEFS_CACHE_DURATION_MS: 60 * 60 * 1000, // 1 hour
+  // Per-user badge cache. We cache for 5 minutes so the section doesn't
+  // re-fetch on every minor DOM mutation (the page is a SPA and our
+  // MutationObserver fires often) but still picks up newly-earned
+  // badges quickly. There is no separate badge definition catalog -
+  // the API docs claim /api/user-badges returns one, but the live
+  // endpoint requires a userId and returns per-user data, so the
+  // extension ships its own static display map in profile-features.js.
   _userBadgesCache: {},      // userId -> { data, ts }
   USER_BADGES_CACHE_DURATION_MS: 5 * 60 * 1000, // 5 minutes
 
@@ -408,9 +407,7 @@ const KoromonsAPI = {
   // ============================================================
   // USER BADGES (Plus tier feature: Koromons Badge Display)
   //
-  // Three endpoints under https://www.koromons.com/api :
-  //   GET /api/user-badges                     -> badge definition catalog
-  //                                               (id, name, icon, ...)
+  // Two endpoints under https://www.koromons.com/api :
   //   GET /api/users/:userId                   -> per-user badge state
   //                                               { badges: { id: bool, ... },
   //                                                 hoardingBadges: [],
@@ -418,41 +415,14 @@ const KoromonsAPI = {
   //   GET /api/users/:userId/user-badges       -> resolved custom badge list
   //                                               (label, color, icon)
   //
+  // The docs also list `GET /api/user-badges` as a "definition catalog"
+  // returning (id, name, icon) entries, but the live endpoint actually
+  // requires a userId and returns per-user data. So the extension ships
+  // its own static display map (see profile-features.js) - no catalog
+  // call is made from here.
+  //
   // No auth required for read endpoints.
   // ============================================================
-
-  /**
-   * Fetch the master catalog of Koromons badge definitions.
-   * Cached in memory for BADGE_DEFS_CACHE_DURATION_MS - definitions
-   * change rarely, so we don't need to refetch per profile view.
-   * Returns [] on failure (so callers can render gracefully).
-   */
-  async getBadgeDefinitions() {
-    const now = Date.now();
-    if (this._badgeDefsCache && (now - this._badgeDefsCacheTs) < this.BADGE_DEFS_CACHE_DURATION_MS) {
-      return this._badgeDefsCache;
-    }
-
-    try {
-      const r = await fetch(`${this.API_ROOT}/user-badges`, {
-        headers: { "Accept": "application/json" }
-      });
-      if (!r.ok) {
-        console.warn(`[BtrKorone/Koromons] getBadgeDefinitions HTTP ${r.status}`);
-        return this._badgeDefsCache || [];
-      }
-      const defs = await r.json();
-      if (Array.isArray(defs)) {
-        this._badgeDefsCache = defs;
-        this._badgeDefsCacheTs = now;
-        return defs;
-      }
-      return [];
-    } catch (err) {
-      console.error("[BtrKorone/Koromons] getBadgeDefinitions failed:", err);
-      return this._badgeDefsCache || [];
-    }
-  },
 
   /**
    * Fetch a single user's calculated Koromons badge state.

@@ -7,11 +7,25 @@
  * layout: a horizontal row of circular tiles with a green ring for
  * badges the user has earned and a grey ring for ones they have not.
  *
- * Data sources (all under https://www.koromons.com/api):
- *   GET /api/user-badges               -> definition catalog (id, name, icon)
- *   GET /api/users/:userId             -> earned-state map for this player
- *   (custom badges arrive embedded inside the per-user response;
- *    /api/users/:userId/user-badges is also available for the resolved form)
+ * Data source (https://www.koromons.com/api):
+ *   GET /api/users/:userId   -> {
+ *     userId,
+ *     badges: { <id>: bool, ... },   // standard badges, flat boolean map
+ *     hoardingBadges: [...],         // per-item hoarder badges
+ *     customBadges: [...]            // staff-issued (label, color, icon)
+ *   }
+ *
+ * NOTE on the badge "catalog":
+ *   The Koromons API documentation lists a `GET /api/user-badges`
+ *   endpoint that supposedly returns badge definitions (id, name, icon).
+ *   The live endpoint actually requires a userId and returns per-user
+ *   data, NOT a catalog. There is no public catalog endpoint, and the
+ *   per-user response carries only badge IDs - no names and no icons.
+ *
+ *   So we ship a static `BADGE_DISPLAY` map below with human-readable
+ *   names and emoji icons keyed by the badge IDs the API uses. Any new
+ *   ID Koromons adds in the future will still render: it just falls
+ *   back to a humanized form of the ID and a generic medal icon.
  *
  * The page is a single-page app: navigating between profiles does not
  * trigger a full reload, so we keep a MutationObserver alive on the body
@@ -36,6 +50,60 @@
   // header on a real /api/users/:id/user-badges request from koromons.com.
   // If the route ever changes, this is the only place to update.
   const KOROMONS_PLAYER_URL = (id) => `https://www.koromons.com/player/${id}`;
+
+  /**
+   * Static display catalog. Keys are the badge IDs returned by
+   *   GET https://www.koromons.com/api/users/:userId
+   * and the order here is the order tiles will be rendered in. Anything
+   * the API returns that is missing from this map is rendered through
+   * humanizeBadgeId() with a generic medal icon.
+   *
+   * Categories (purely for ordering / readability):
+   *   1. RAP tier badges  - hundredK -> twentyMillion
+   *   2. Collection badges
+   *   3. Serial-related badges
+   *   4. Trading activity badges
+   *   5. Identity / fun
+   */
+  const BADGE_DISPLAY = {
+    // RAP tiers
+    hundredK:         { name: "100K+",             icon: "\uD83D\uDCAF" }, // 100
+    fiveHundredK:     { name: "500K+",             icon: "\uD83D\uDCB0" }, // money bag
+    oneMillion:       { name: "1M+",               icon: "\uD83D\uDCB5" }, // dollar
+    twoMillion:       { name: "2M+",               icon: "\uD83D\uDCB4" }, // yen
+    fiveMillion:      { name: "5M+",               icon: "\uD83D\uDCB6" }, // euro
+    tenMillion:       { name: "10M+",              icon: "\uD83D\uDCB7" }, // pound
+    twentyMillion:    { name: "20M+",              icon: "\uD83C\uDFE6" }, // bank
+
+    // Collection
+    accessorized:     { name: "Accessorized",      icon: "\uD83C\uDFA9" }, // top hat
+    collector:        { name: "Collector",         icon: "\uD83D\uDCBC" }, // briefcase
+    rareOwner:        { name: "Rare Owner",        icon: "\uD83D\uDC8E" }, // gem
+    rareEnthusiast:   { name: "Rare Enthusiast",   icon: "\uD83D\uDD37" }, // small blue diamond
+    rareSupremist:    { name: "Rare Supremist",    icon: "\uD83D\uDD2E" }, // crystal ball
+    dominator:        { name: "Dominator",         icon: "\uD83D\uDC51" }, // crown
+    sparkly:          { name: "Sparkly",           icon: "\u2728"        }, // sparkles
+    federated:        { name: "Federated",         icon: "\uD83D\uDEE1\uFE0F" }, // shield
+
+    // Serials
+    lowSerial:        { name: "Low Serial",        icon: "\uD83D\uDD22" }, // 1234
+    sequentialSerial: { name: "Sequential Serial", icon: "\uD83D\uDCC8" }, // chart up
+    serialOne:        { name: "Serial #1",         icon: "1\uFE0F\u20E3" }, // keycap 1
+
+    // Trading activity
+    tradeAdvertiser:  { name: "Trade Advertiser",  icon: "\uD83D\uDCE2" }, // loudspeaker
+    frequentTrader:   { name: "Frequent Trader",   icon: "\uD83D\uDD04" }, // counterclockwise arrows
+    activeTrader:     { name: "Active Trader",     icon: "\u26A1"        }, // bolt
+    boundlessTrader:  { name: "Boundless Trader",  icon: "\u267E\uFE0F" }, // infinity
+
+    // Identity / fun
+    luckycat:         { name: "Lucky Cat",         icon: "\uD83D\uDC08" }, // cat
+    verified:         { name: "Verified",          icon: "\u2705"        }  // check mark
+  };
+
+  // Display order = insertion order of BADGE_DISPLAY. Snapshotted now so
+  // adding new keys at runtime would not shift existing tiles around.
+  const BADGE_ORDER = Object.keys(BADGE_DISPLAY);
 
   let observer = null;
   let scheduled = false;
@@ -182,15 +250,12 @@
 
   async function injectKoromonsSection(userId, anchorAfter) {
     // Build a skeleton first so the user sees the section header
-    // immediately. Real content is filled in once the API responses land.
+    // immediately. Real content is filled in once the API response lands.
     const section = buildSkeletonSection(userId);
     anchorAfter.insertAdjacentElement("afterend", section);
 
     try {
-      const [definitions, userBadges] = await Promise.all([
-        KoromonsAPI.getBadgeDefinitions(),
-        KoromonsAPI.getUserBadges(userId)
-      ]);
+      const userBadges = await KoromonsAPI.getUserBadges(userId);
 
       // The user could have navigated away while we were awaiting -
       // bail if the section we created has been removed from the DOM
@@ -201,7 +266,7 @@
         return;
       }
 
-      renderBadges(section, definitions, userBadges);
+      renderBadges(section, userBadges);
     } catch (err) {
       console.error("[BtrKorone/KoromonsBadgeDisplay] Failed to load badges:", err);
       const grid = section.querySelector(".btrkorone-koromons-badges-grid");
@@ -247,33 +312,51 @@
     return section;
   }
 
-  function renderBadges(section, definitions, userBadges) {
+  function renderBadges(section, userBadges) {
     const grid = section.querySelector(".btrkorone-koromons-badges-grid");
     if (!grid) return;
     grid.innerHTML = "";
 
-    const earnedMap = (userBadges && userBadges.badges) || {};
+    const earnedMap = (userBadges && userBadges.badges && typeof userBadges.badges === "object")
+      ? userBadges.badges
+      : {};
     const customBadges = (userBadges && Array.isArray(userBadges.customBadges)) ? userBadges.customBadges : [];
     const hoardingBadges = (userBadges && Array.isArray(userBadges.hoardingBadges)) ? userBadges.hoardingBadges : [];
 
-    // 1. Standard badges from the definition catalog. Render every entry
-    //    so the grid mirrors RoliBadges (earned = green, locked = grey).
-    if (Array.isArray(definitions) && definitions.length > 0) {
-      definitions.forEach(def => {
-        if (!def || !def.id) return;
-        const earned = !!earnedMap[def.id];
-        grid.appendChild(buildStandardTile(def, earned));
-      });
-    }
+    // Render order:
+    //   1. Every badge ID we have curated display metadata for, in
+    //      BADGE_ORDER. Earned tiles get a green ring, missing/false get
+    //      a grey ring. This guarantees a stable, RoliBadges-style row.
+    //   2. Any badge IDs that the API returned but we don't yet know
+    //      about - render them through humanizeBadgeId() so future
+    //      additions don't disappear silently.
+    //   3. Hoarding badges (always earned by definition).
+    //   4. Custom badges (staff-issued, with custom color).
 
-    // 2. Hoarding badges (per-item achievement badges). Always shown if
-    //    present - they're earned by definition.
+    const seenIds = new Set();
+
+    BADGE_ORDER.forEach(id => {
+      seenIds.add(id);
+      const display = BADGE_DISPLAY[id];
+      const earned = !!earnedMap[id];
+      grid.appendChild(buildStandardTile(id, display, earned));
+    });
+
+    Object.keys(earnedMap).forEach(id => {
+      if (seenIds.has(id)) return;
+      seenIds.add(id);
+      const earned = !!earnedMap[id];
+      // Unknown ID - render with auto-generated label + medal icon so the
+      // tile is not lost. Console-warn once so we know to add metadata.
+      console.warn(`[BtrKorone/KoromonsBadgeDisplay] Unknown badge id: ${id} - falling back to humanized label.`);
+      grid.appendChild(buildStandardTile(id, null, earned));
+    });
+
     hoardingBadges.forEach(hb => {
       if (!hb) return;
       grid.appendChild(buildHoardingTile(hb));
     });
 
-    // 3. Custom badges (staff-issued). Render with their custom color ring.
     customBadges.forEach(cb => {
       if (!cb) return;
       grid.appendChild(buildCustomTile(cb));
@@ -292,22 +375,23 @@
   // diverge later without re-tangling the renderer.
   // ============================================================
 
-  function buildStandardTile(def, earned) {
+  function buildStandardTile(id, display, earned) {
     const tile = document.createElement("div");
     tile.className = "btrk-kb-tile" + (earned ? " btrk-kb-earned" : " btrk-kb-locked");
-    tile.title = (def.name || def.id) + (earned ? " (earned)" : " (not earned)");
+    const labelText = (display && display.name) || humanizeBadgeId(id);
+    tile.title = labelText + (earned ? " (earned)" : " (not earned)");
 
     const circle = document.createElement("div");
     circle.className = "btrk-kb-circle";
 
     const icon = document.createElement("span");
     icon.className = "btrk-kb-icon";
-    icon.textContent = def.icon || "\uD83C\uDFC5"; // medal as fallback
+    icon.textContent = (display && display.icon) || "\uD83C\uDFC5"; // medal fallback
     circle.appendChild(icon);
 
     const label = document.createElement("div");
     label.className = "btrk-kb-label";
-    label.textContent = def.name || def.id;
+    label.textContent = labelText;
 
     tile.appendChild(circle);
     tile.appendChild(label);
@@ -366,6 +450,24 @@
     tile.appendChild(circle);
     tile.appendChild(label);
     return tile;
+  }
+
+  /**
+   * Turn a camelCase badge ID into a human-readable label.
+   * Used as a fallback when the API returns an ID that isn't in
+   * BADGE_DISPLAY yet.
+   *   "rareEnthusiast" -> "Rare Enthusiast"
+   *   "tenMillion"     -> "Ten Million"
+   */
+  function humanizeBadgeId(id) {
+    if (!id || typeof id !== "string") return "Badge";
+    return id
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^\w/, c => c.toUpperCase())
+      .replace(/\s\w/g, c => c.toUpperCase());
   }
 
   /**
