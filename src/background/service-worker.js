@@ -563,8 +563,11 @@ async function showTradeNotification(trade) {
     iconUrl: iconDataUrl || chrome.runtime.getURL("icons/icon128.png"),
     title: "Trade Inbound",
     message: messageLines.join("\n"),
-    priority: 1,
-    requireInteraction: false,
+    // Test notifications stick around (requireInteraction:true) so they
+    // can't be missed by an aggressive auto-dismiss in Opera/Chrome,
+    // and they get max priority so they aren't silently coalesced.
+    priority: isTest ? 2 : 1,
+    requireInteraction: !!isTest,
     buttons: [
       { title: "Open" },
       { title: "Decline" }
@@ -573,7 +576,28 @@ async function showTradeNotification(trade) {
   if (contextMessage) options.contextMessage = contextMessage;
 
   return new Promise(resolve => {
-    chrome.notifications.create(notifId, options, () => resolve());
+    chrome.notifications.create(notifId, options, (createdId) => {
+      // chrome.runtime.lastError gets set on failure but only inside
+      // this callback - if we don't read it here, the failure is
+      // swallowed and the SW console just shows nothing happening.
+      const err = chrome.runtime.lastError;
+      if (err) {
+        console.error(
+          "[BtrKorone/TradeNotif] notifications.create FAILED:",
+          err.message || err,
+          "\nLikely causes: notifications blocked for this extension at the OS or browser level. " +
+          "On Windows, check Settings > System > Notifications > Opera/Chrome. " +
+          "On macOS, System Settings > Notifications > Opera/Chrome (must be 'Allow Notifications' AND 'Alerts' style for buttons to render). " +
+          "Also check the browser's site settings for chrome-extension://* notifications."
+        );
+      } else {
+        console.log(
+          `[BtrKorone/TradeNotif] notifications.create OK id=${createdId} ` +
+          `(test=${isTest}, requireInteraction=${options.requireInteraction})`
+        );
+      }
+      resolve();
+    });
   });
 }
 
@@ -742,6 +766,24 @@ async function resetTradeNotificationState() {
 checkForNewTrades().catch(err =>
   console.warn("[BtrKorone/TradeNotif] Startup check failed:", err)
 );
+
+// Probe the browser's notification permission at startup so we surface
+// "notifications are blocked" up front instead of waiting for a silent
+// failure when the user clicks Test or receives a real trade.
+if (chrome.notifications && chrome.notifications.getPermissionLevel) {
+  chrome.notifications.getPermissionLevel((level) => {
+    if (level !== "granted") {
+      console.warn(
+        `[BtrKorone/TradeNotif] Browser notification permission level is "${level}". ` +
+        `Notifications WILL NOT appear until this is "granted". ` +
+        `Open the browser's notification settings (or chrome://settings/content/notifications) ` +
+        `and ensure this extension is allowed.`
+      );
+    } else {
+      console.log("[BtrKorone/TradeNotif] Browser notification permission: granted.");
+    }
+  });
+}
 
 // Also re-run on browser startup (covers the case where Chrome was
 // just opened and onInstalled doesn't fire).
