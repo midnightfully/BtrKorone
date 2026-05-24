@@ -37,7 +37,11 @@
   // Set to false (or build a popup toggle) to re-enable the RoPro-style
   // full injection once the layout interaction is sorted out.
   // ============================================================
-  const MINIMAL_MODE = true;
+  // 2.4.5: surgical injection re-enabled. Per-item bottom-left value badges
+  // + a centered ↑/↓ percentage between sections, RoPro-style. The bottom
+  // side-by-side panel still renders as a graceful fallback if Pekora's
+  // markup ever shifts and the give/receive headings can't be found.
+  const MINIMAL_MODE = false;
 
   // Demand string -> 1-5 numeric rating
   const DEMAND_RATING = {
@@ -621,24 +625,21 @@
     const summary = document.createElement("div");
     summary.className = "btrk-section-summary";
     summary.dataset.side = side;
+    // Pekora already shows "Value: R$ XXX" (RAP) on the native heading line,
+    // so we only add what's NEW: the Koromons community Value + demand.
     summary.innerHTML = `
       <div class="btrk-section-row">
-        <span class="btrk-section-label">Korone Rolimons Value:</span>
+        <span class="btrk-section-label">Korone Value:</span>
         <span class="btrk-section-val">
-          <span class="btrk-icon-rolimons" aria-hidden="true">R</span>
+          <span class="btrk-side-icon btrk-icon-koromons" aria-hidden="true">K</span>
           ${valuedCount > 0 ? formatValue(totalKoroneValue) : "&mdash;"}
         </span>
       </div>
       <div class="btrk-section-row">
-        <span class="btrk-section-label">Korone Demand Rating:</span>
+        <span class="btrk-section-label">Demand:</span>
         <span class="btrk-section-val">
-          <span class="btrk-icon-rolimons" aria-hidden="true">R</span>
           ${demandRating > 0 ? `${demandRating.toFixed(1)}/5.0` : "&mdash;"}
         </span>
-      </div>
-      <div class="btrk-section-row btrk-section-row-muted">
-        <span class="btrk-section-label">Total RAP:</span>
-        <span class="btrk-section-val">${formatValue(totalRap)}</span>
       </div>
     `;
     container.appendChild(summary);

@@ -123,9 +123,12 @@ body.btrkorone-active {
 /* === Per-card Robux value pill (top-right corner) === */
 
 .btrkorone-value-badge {
+  /* Anchored to the bottom-left of the item frame, RoPro-style.
+     The card is flipped to position:relative by addBadgeToCard() if it
+     isn't already, so this absolute positioning lands inside the frame. */
   position: absolute;
-  top: 5px;
-  right: 5px;
+  bottom: 5px;
+  left: 5px;
   display: inline-flex;
   align-items: center;
   gap: 5px;

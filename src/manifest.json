@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BtrKorone",
-  "version": "2.4.4",
+  "version": "2.4.5",
   "description": "Enhances the Korone (Pekora) revival site with verified premium tiers, a play button, RoPro-style trade modal, and desktop notifications for new trades.",
   "author": "BtrKorone Community",
   "permissions": [
