@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "BtrKorone",
-  "version": "2.6.1",
-  "description": "Enhances the Korone (Pekora) revival site with verified premium tiers, a play button, RoPro-style trade modal, and desktop notifications for new trades.",
+  "version": "2.7.0",
+  "description": "Enhances the Korone (Pekora) revival site with verified premium tiers, a play button, RoPro-style trade modal, rare item badges on catalog cards, Koromons badges on user profiles, and desktop notifications for new trades.",
   "author": "BtrKorone Community",
   "permissions": [
     "storage",
