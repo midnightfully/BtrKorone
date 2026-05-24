@@ -59,7 +59,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["content/styles/*", "icons/*"],
+      "resources": ["content/styles/*", "icons/*", "content/page-spy.js"],
       "matches": ["*://*.korone.live/*", "*://*.pekora.zip/*"]
     }
   ]

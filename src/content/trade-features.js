@@ -44,6 +44,9 @@
   // ID in onclick / href / data-* attributes; capturing it on click is far
   // more reliable than trying to scrape the modal afterwards.
   let lastTradeHint = { id: null, ts: 0 };
+  // Full trade detail captured by the page-spy when Pekora itself fetched it.
+  // Lets us skip our own refetch + cache lookup entirely.
+  let lastTradeDetail = { id: null, detail: null, ts: 0 };
   const HINT_TTL_MS = 8000;
 
   function isTradePage() {
@@ -51,10 +54,11 @@
   }
 
   /**
-   * Listen for trade-id hints relayed from the page-spy script (MAIN world).
-   * The spy intercepts Pekora's own /apisite/trades/v1/trades/{id} fetch and
-   * postMessages the {id} here so we can use it as a definitive hint when
-   * the modal opens, without scraping the DOM.
+   * Listen for trade-id hints AND full trade-detail payloads relayed from
+   * the page-spy script. The spy intercepts Pekora's own
+   * /apisite/trades/v1/trades/{id} fetch and posts both the trade ID
+   * (immediately on URL match) and, when the response arrives, the full
+   * parsed JSON. Using the cached detail lets us skip our own refetch.
    */
   function installFetchSpyListener() {
     window.addEventListener("message", (event) => {
@@ -62,14 +66,44 @@
       if (event.source !== window) return;
       const data = event.data;
       if (!data || data.__btrkorone !== true) return;
-      if (data.type !== "TRADE_FETCH") return;
 
-      const raw = String(data.tradeId || "");
-      if (!/^\d{3,12}$/.test(raw)) return;
+      if (data.type === "TRADE_FETCH") {
+        const raw = String(data.tradeId || "");
+        if (!/^\d{3,12}$/.test(raw)) return;
+        lastTradeHint = { id: raw, ts: Date.now() };
+        console.log(`[BtrKorone/Trades] Fetch spy captured trade ID: ${raw}`);
+        return;
+      }
 
-      lastTradeHint = { id: raw, ts: Date.now() };
-      console.log(`[BtrKorone/Trades] Fetch spy captured trade ID: ${raw}`);
+      if (data.type === "TRADE_DETAIL" && data.detail) {
+        const raw = String(data.tradeId || "");
+        if (!/^\d{3,12}$/.test(raw)) return;
+        lastTradeDetail = { id: raw, detail: data.detail, ts: Date.now() };
+        // The hint is cheaper to use elsewhere too
+        lastTradeHint = { id: raw, ts: Date.now() };
+        console.log(`[BtrKorone/Trades] Spy captured full detail for trade ${raw}`);
+        // Don't enhance directly here - let the MutationObserver fire
+        // tryEnhanceVisibleModal once the modal DOM is actually present.
+      }
     });
+  }
+
+  /**
+   * Inject the page-spy script tag into the page's main world as a fallback
+   * for browsers / setups where world:"MAIN" content_scripts don't load.
+   * The spy itself self-guards against double-installation.
+   */
+  function injectPageSpyFallback() {
+    try {
+      if (window.__btrkPageSpyInstalled) return; // MAIN-world load already won
+      const s = document.createElement("script");
+      s.src = chrome.runtime.getURL("content/page-spy.js");
+      s.async = false;
+      s.onload = () => s.remove();
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) {
+      console.warn("[BtrKorone/Trades] Could not inject page-spy fallback:", e);
+    }
   }
 
   /**
@@ -136,6 +170,7 @@
 
     console.log("[BtrKorone/Trades] Init for user:", cachedMyUserId);
     installFetchSpyListener();
+    injectPageSpyFallback();
     installClickHintCapture();
     await refreshTradeCache();
     observeForTradeModal();
@@ -197,6 +232,17 @@
 
     pendingResolveKey = modalKey;
     try {
+      // Fast path: if the page-spy already captured the full trade detail
+      // for this modal (it almost always does, because Pekora itself just
+      // fetched it to render the modal), use it directly. No refetch, no
+      // cache lookup, no DOM scraping.
+      if (lastTradeDetail.detail && Date.now() - lastTradeDetail.ts < HINT_TTL_MS) {
+        console.log(`[BtrKorone/Trades] Using spy-cached detail for trade ${lastTradeDetail.id}`);
+        enhanceModal(modal, lastTradeDetail.detail);
+        injectedTradeKey = modalKey;
+        return;
+      }
+
       const tradeId = await resolveTradeIdFromModal(modal);
       if (!tradeId) {
         // Don't stamp injectedTradeKey here - we want to retry on the next
