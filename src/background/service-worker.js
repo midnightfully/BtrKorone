@@ -128,8 +128,32 @@ async function handleMessage(message, sender) {
     case "FETCH_AVATAR":
       return await handleFetchAvatar(message.userId);
 
+    case "GET_CURRENT_PEKORA_USER":
+      return await handleGetCurrentPekoraUser();
+
     default:
       return { error: "Unknown message type" };
+  }
+}
+
+// === Detect Currently Logged-In Pekora User (no linking required) ===
+
+async function handleGetCurrentPekoraUser() {
+  try {
+    const data = await PekoraAPI.getAuthenticatedUser();
+    if (!data || !data.id) {
+      return { loggedIn: false };
+    }
+    return {
+      loggedIn: true,
+      userId: data.id,
+      username: data.name || data.username || data.displayName || null,
+      displayName: data.displayName || null,
+      avatarUrl: PekoraAPI.getAvatarUrl(data.id)
+    };
+  } catch (error) {
+    console.warn("[BtrKorone] getAuthenticatedUser failed:", error);
+    return { loggedIn: false, error: error.message };
   }
 }
 
