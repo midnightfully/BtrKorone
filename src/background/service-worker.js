@@ -104,6 +104,9 @@ async function handleMessage(message, sender) {
     case "GENERATE_TOKEN":
       return await handleGenerateToken(message.userId);
 
+    case "LINK_ACCOUNT":
+      return await handleLinkAccount(message.userId, message.token);
+
     case "VERIFY_PREMIUM":
       return await handleVerifyPremium(message.userId, message.token);
 
@@ -183,6 +186,34 @@ async function handleGenerateToken(userId) {
     username,
     instructions: `Place this token in your Korone About Me section: ${token}`
   };
+}
+
+// === Account Linking (no gamepass check) ===
+
+async function handleLinkAccount(userId, token) {
+  if (!userId || !token) {
+    return { error: "Missing userId or token for account linking." };
+  }
+
+  const result = await PremiumVerifier.performAccountLink(userId, token);
+
+  if (result.success) {
+    // Cache identity but DO NOT touch the premium tier - that's the job of
+    // the future "Verify Subscription" button.
+    await BtrStorage.setVerificationTimestamp(Date.now());
+    if (result.username) {
+      await BtrStorage.setCachedUsername(result.username);
+    }
+    if (result.avatarUrl) {
+      await BtrStorage.setCachedAvatarUrl(result.avatarUrl);
+    }
+  } else if (result.username || result.avatarUrl) {
+    // Even on failure, cache anything we managed to get
+    if (result.username) await BtrStorage.setCachedUsername(result.username);
+    if (result.avatarUrl) await BtrStorage.setCachedAvatarUrl(result.avatarUrl);
+  }
+
+  return result;
 }
 
 // === Premium Verification ===

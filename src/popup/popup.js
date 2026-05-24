@@ -50,6 +50,19 @@ function renderUI() {
   renderTierFeatures("free", 0);
   renderTierFeatures("plus", 1);
   renderTierFeatures("rex", 2);
+
+  // Show/hide upgrade prompts based on the user's tier
+  renderUpgradePrompts(s.tier);
+}
+
+// === Upgrade Prompts (shown in the Plus / Rex tabs) ===
+
+function renderUpgradePrompts(userTier) {
+  const plusBtn = document.getElementById("upgrade-plus-btn");
+  const rexBtn  = document.getElementById("upgrade-rex-btn");
+
+  if (plusBtn) plusBtn.style.display = userTier < BTRKORONE.TIERS.PLUS.id ? "flex" : "none";
+  if (rexBtn)  rexBtn.style.display  = userTier < BTRKORONE.TIERS.REX.id  ? "flex" : "none";
 }
 
 // === Tier Tabs ===
@@ -188,6 +201,21 @@ function setupActions() {
   document.getElementById("btn-feature").addEventListener("click", () => {
     window.open("https://github.com/midnightfully/BtrKorone/issues/new?labels=enhancement", "_blank");
   });
+
+  // Tier upgrade buttons (shown inside the Plus / Rex tab panels)
+  const plusBtn = document.getElementById("upgrade-plus-btn");
+  if (plusBtn) {
+    plusBtn.addEventListener("click", () => openGamepassPage(BTRKORONE.TIERS.PLUS.gamepassId));
+  }
+  const rexBtn = document.getElementById("upgrade-rex-btn");
+  if (rexBtn) {
+    rexBtn.addEventListener("click", () => openGamepassPage(BTRKORONE.TIERS.REX.gamepassId));
+  }
+}
+
+function openGamepassPage(gamepassId) {
+  const url = BTRKORONE.PEKORA_API.GAMEPASS_PAGE.replace("{gamepassId}", gamepassId);
+  window.open(url, "_blank");
 }
 
 // === Verification Modal ===
@@ -254,18 +282,18 @@ function setupModal() {
     if (!userId || !token) { showMessage("Generate a token first.", "error"); return; }
 
     const btn = document.getElementById("btn-verify");
-    btn.textContent = "Verifying...";
+    btn.textContent = "Linking...";
     btn.disabled = true;
 
-    const result = await sendMessage({ type: "VERIFY_PREMIUM", userId, token });
+    const result = await sendMessage({ type: "LINK_ACCOUNT", userId, token });
 
-    btn.textContent = "Verify Ownership";
+    btn.textContent = "Verify & Link Account";
     btn.disabled = false;
 
     if (result.success) {
-      showMessage(result.message, "success");
+      showMessage(result.message || "Account linked.", "success");
       await loadFullState();
-      setTimeout(closeVerifyModal, 2500);
+      setTimeout(closeVerifyModal, 2000);
     } else {
       showMessage(result.message || result.error, "error");
     }

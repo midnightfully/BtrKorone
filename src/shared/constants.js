@@ -5,7 +5,7 @@
 
 const BTRKORONE = {
   NAME: "BtrKorone",
-  VERSION: "2.4.0",
+  VERSION: "2.4.2",
 
   KORONE_BASE_URL: "https://www.pekora.zip",
   KORONE_GAMES_URL: "https://www.pekora.zip/games",
@@ -17,7 +17,8 @@ const BTRKORONE = {
     USER_HEADSHOT: "https://www.pekora.zip/headshot-thumbnail/image?userId={userId}&width=150&height=150&format=png",
     USER_PROFILE_PAGE: "https://www.pekora.zip/users/{userId}/profile",
     INVENTORY: "https://www.pekora.zip/apisite/inventory/v2/users/{userId}/assets/collectibles?limit=100&sortOrder=Desc",
-    GAME_JOIN: "https://www.pekora.zip/games/{placeId}/play"
+    GAME_JOIN: "https://www.pekora.zip/games/{placeId}/play",
+    GAMEPASS_PAGE: "https://www.pekora.zip/Item.aspx?id={gamepassId}"
   },
 
   GAMEPASS_API: {
