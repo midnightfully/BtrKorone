@@ -1,30 +1,55 @@
 /**
- * BtrKorone - Catalog Koromons Badges (Plus tier)
+ * BtrKorone - Koromons Value Badges (Plus tier)
  *
- * Adds a small blue gem badge on top of any catalog item card whose name
- * resolves to an item tracked on koromons.com (i.e. has a Value).
+ * Drops a small blue gem badge on top of any Pekora item card whose
+ * asset ID or name resolves to a Koromons-tracked entry with a Value.
  *
- * Why a separate file: the existing trade-features.js is gated on the
- * Rex `tradeModal` feature; this Plus-tier feature touches different
- * surfaces (catalog grid, item detail page) and shouldn't piggy-back on
- * that gate.
+ * Surfaces covered (anything on `*://*.pekora.zip/*`):
+ *   - Catalog grid + search results + item-detail "more like this"
+ *   - User profile inventory  (e.g. /users/42770/profile)
+ *   - Trade item-picker dialogs that link to /catalog/<id>
  *
- * Pekora's CSS Module class names hash on every build (e.g.
- * `itemCard-0-2-247`), so we never hard-code class names. We anchor by
- * URL shape (`/catalog/<id>/...`) and walk up to a thumbnail-sized
- * container, the same way the play-button code does for game cards.
+ * (The trade modal itself is handled separately in trade-features.js
+ * so that file can use the per-item value calc it already does.)
+ *
+ * Resolution priority, per item:
+ *   1. Numeric asset ID from the anchor's URL or `data-*` attribute
+ *      -> KoromonsAPI.getById  (fastest, zero false-positives)
+ *   2. Display name extracted from aria-label / title elements / alt /
+ *      link text / URL slug -> KoromonsAPI.getByName, prefix-stripped
+ *      retry, fuzzy fallback
+ *   3. (Profile only) Thumbnail-image fallback for item rows that
+ *      don't link to /catalog: pull the asset ID out of the image's
+ *      src URL and try getById.
+ *
+ * Pekora's CSS Module class names hash on every build, so we never
+ * pin selectors. Anchors are matched by URL shape, thumbnails by src
+ * pattern + size sanity.
  */
 
-(function BtrKoromonsCatalogBadges() {
+(function BtrKoromonsBadges() {
   "use strict";
 
-  // Pekora item URLs look like /catalog/12345/Item-Name. Anything else
-  // matched by the prefix is filtered out by extractItemId.
-  const CATALOG_HREF_RX = /^\/catalog\/(\d+)(?:\/|$)/i;
+  // /catalog/12345 or /catalog/12345/Item-Slug. The trailing-slash form
+  // covers the case where Pekora drops the slug entirely.
+  const CATALOG_HREF_RX = /\/catalog\/(\d+)(?:\/|\?|#|$)/i;
+
+  // Pekora item thumbnails embed the asset ID in the URL, e.g.
+  //   /asset-thumbnail/12345/...
+  //   /images/thumbnails/asset/12345.png
+  //   /Thumbs/Avatar.ashx?...&AssetId=12345
+  // We match any of these and capture the digits.
+  const THUMB_ID_RX = /\/(?:asset-thumbnail|asset|item-thumbnail|thumbnails\/asset)\/(\d{2,12})(?:[\/.?]|$)/i;
+  const THUMB_QS_RX = /[?&](?:assetId|AssetId|itemId|id)=(\d{2,12})(?:&|$)/i;
 
   // Common vendor prefixes Pekora returns ahead of the actual item name
   // (e.g. "Bundle: " on bundle items). Stripped before Koromons lookup.
   const VENDOR_PREFIX_RX = /^\s*(BIG|Bundle|Hat|Bundle)\s*:\s*/i;
+
+  // Profile pages use a path like /users/42770/profile. We use this
+  // hint to enable the (slightly more aggressive) thumbnail fallback
+  // pass without risking false positives on the catalog grid.
+  const PROFILE_PATH_RX = /\/users\/\d+\/profile/i;
 
   let observer = null;
   let scheduled = false;
@@ -37,7 +62,7 @@
     clearInterval(waitForInit);
 
     if (!isFeatureActive()) {
-      console.log("[BtrKorone/CatalogBadges] Feature not active.");
+      console.log("[BtrKorone/Badges] Feature not active.");
       return;
     }
 
@@ -46,10 +71,10 @@
     try {
       await KoromonsAPI.load();
       console.log(
-        `[BtrKorone/CatalogBadges] Active. Koromons items: ${KoromonsAPI.itemCount}.`
+        `[BtrKorone/Badges] Active. Koromons items: ${KoromonsAPI.itemCount}.`
       );
     } catch (e) {
-      console.warn("[BtrKorone/CatalogBadges] Koromons load failed:", e);
+      console.warn("[BtrKorone/Badges] Koromons load failed:", e);
       return;
     }
 
@@ -93,15 +118,17 @@
     if (!isFeatureActive()) return;
 
     let injected = 0;
+
+    // Pass 1: catalog-anchor items (catalog grid, profile inventory
+    // when each row links to its catalog page, search results, etc.)
     findCatalogAnchors().forEach(anchor => {
       if (anchor.dataset.btrkBadgeChecked === "1") return;
       anchor.dataset.btrkBadgeChecked = "1";
 
-      const itemId = extractItemId(anchor);
-      const name = extractItemName(anchor);
-      if (!name) return;
+      const itemId = extractIdFromAnchor(anchor);
+      const name   = extractItemName(anchor);
 
-      const koromon = lookupKoromon(name);
+      const koromon = lookupKoromon({ id: itemId, name });
       if (!koromon) return;
 
       const value = parseInt(koromon.Value || koromon.value || 0) || 0;
@@ -111,13 +138,58 @@
       if (host.querySelector(".btrkorone-koromons-badge")) return;
 
       ensurePositioned(host);
-      host.appendChild(buildBadge(name, value, koromon, itemId));
+      host.appendChild(buildBadge(name || koromon.Name || "Item", value, koromon, itemId || koromon.itemId));
       injected++;
     });
 
-    if (injected > 0) {
-      console.log(`[BtrKorone/CatalogBadges] Tagged ${injected} item(s).`);
+    // Pass 2: thumbnail-only items on profile pages.
+    // Inventory rows on Pekora's profile sometimes render as bare
+    // <img> thumbnails inside a wrapper that isn't an <a>. We match
+    // the asset ID out of the image URL and resolve via getById.
+    // Strictly limited to /users/<id>/profile to avoid mistaking
+    // friend avatars / badge icons / etc. for tradable items.
+    if (PROFILE_PATH_RX.test(window.location.pathname)) {
+      injected += injectThumbnailOnlyItems();
     }
+
+    if (injected > 0) {
+      console.log(`[BtrKorone/Badges] Tagged ${injected} item(s) on this view.`);
+    }
+  }
+
+  function injectThumbnailOnlyItems() {
+    let n = 0;
+    document.querySelectorAll("img").forEach(img => {
+      if (img.dataset.btrkBadgeChecked === "1") return;
+
+      const id = extractIdFromImg(img);
+      if (!id) return;
+
+      // Skip images that are already inside a catalog anchor - pass 1
+      // handled them and the badge would double-render.
+      if (img.closest('a[href*="/catalog/"]')) return;
+
+      // Skip avatars / badge sized images. Item thumbnails on profile
+      // are typically 60-200 px square.
+      const r = img.getBoundingClientRect();
+      if (r.width < 40 || r.width > 260 || r.height < 40 || r.height > 260) return;
+
+      img.dataset.btrkBadgeChecked = "1";
+
+      const koromon = KoromonsAPI.getById(id);
+      if (!koromon) return;
+
+      const value = parseInt(koromon.Value || koromon.value || 0) || 0;
+      if (value <= 0) return;
+
+      const host = img.parentElement || img;
+      if (host.querySelector(".btrkorone-koromons-badge")) return;
+
+      ensurePositioned(host);
+      host.appendChild(buildBadge(koromon.Name || "Item", value, koromon, id));
+      n++;
+    });
+    return n;
   }
 
   function removeAllBadges() {
@@ -131,7 +203,7 @@
    * Find every anchor on the page that points at a catalog item.
    * Pekora reuses this URL pattern in many places: catalog grid, search
    * results, marketplace listings, item detail "more like this" rows,
-   * trade item lookups, etc. We tag all of them.
+   * trade item lookups, and profile inventory rows. We tag all of them.
    */
   function findCatalogAnchors() {
     const out = [];
@@ -142,10 +214,48 @@
     return out;
   }
 
-  function extractItemId(anchor) {
+  /**
+   * Extract the numeric asset ID from an anchor. Tries, in order:
+   *   1. /catalog/<id> in the href
+   *   2. data-id / data-item-id / data-asset-id on the anchor itself
+   *   3. Same data-* attrs on a parent (some grids put the ID on the row)
+   *   4. Any thumbnail image inside the anchor whose URL contains an ID
+   */
+  function extractIdFromAnchor(anchor) {
     const href = anchor.getAttribute("href") || "";
     const m = href.match(CATALOG_HREF_RX);
-    return m ? m[1] : null;
+    if (m) return m[1];
+
+    const fromData =
+      anchor.dataset.itemId ||
+      anchor.dataset.id ||
+      anchor.dataset.assetId;
+    if (fromData && /^\d+$/.test(fromData)) return fromData;
+
+    let p = anchor.parentElement;
+    for (let i = 0; p && i < 3; i++) {
+      const v = p.dataset && (p.dataset.itemId || p.dataset.id || p.dataset.assetId);
+      if (v && /^\d+$/.test(v)) return v;
+      p = p.parentElement;
+    }
+
+    const img = anchor.querySelector("img");
+    if (img) {
+      const fromImg = extractIdFromImg(img);
+      if (fromImg) return fromImg;
+    }
+    return null;
+  }
+
+  /** Match the asset ID out of any Pekora thumbnail image URL. */
+  function extractIdFromImg(img) {
+    const src = img.getAttribute("src") || "";
+    if (!src) return null;
+    const m1 = src.match(THUMB_ID_RX);
+    if (m1) return m1[1];
+    const m2 = src.match(THUMB_QS_RX);
+    if (m2) return m2[1];
+    return null;
   }
 
   /**
@@ -187,7 +297,7 @@
 
     // Decode the URL slug as a final fallback (e.g. "Living-Art-Starry-Night").
     const href = anchor.getAttribute("href") || "";
-    const m = href.match(/^\/catalog\/\d+\/(.+?)(?:\/|$)/i);
+    const m = href.match(/\/catalog\/\d+\/(.+?)(?:\/|\?|#|$)/i);
     if (m) {
       try {
         return decodeURIComponent(m[1]).replace(/[-_]+/g, " ");
@@ -197,24 +307,29 @@
   }
 
   /**
-   * Look up the item in the Koromons cache. We try the raw name first
-   * and then the prefix-stripped variant ("Bundle: X" -> "X"); on a miss
-   * we fall back to fuzzy search (LCS-based, threshold 0.6 inside
-   * KoromonsAPI). Returns the matched item record or null.
+   * Look up an item in the Koromons cache. ID-based resolution wins
+   * when present (it's a single hashmap hit and can never false-positive
+   * on a name collision). Otherwise we walk the same name path the
+   * trade modal uses: raw name, prefix-stripped name, fuzzy fallback.
    */
-  function lookupKoromon(rawName) {
-    if (!rawName) return null;
-    const direct = KoromonsAPI.getByName(rawName);
+  function lookupKoromon({ id, name }) {
+    if (id && typeof KoromonsAPI.getById === "function") {
+      const byId = KoromonsAPI.getById(id);
+      if (byId) return byId;
+    }
+    if (!name) return null;
+
+    const direct = KoromonsAPI.getByName(name);
     if (direct) return direct;
 
-    const stripped = rawName.replace(VENDOR_PREFIX_RX, "").trim();
-    if (stripped && stripped !== rawName) {
+    const stripped = name.replace(VENDOR_PREFIX_RX, "").trim();
+    if (stripped && stripped !== name) {
       const second = KoromonsAPI.getByName(stripped);
       if (second) return second;
     }
 
     if (typeof KoromonsAPI.fuzzySearch === "function") {
-      return KoromonsAPI.fuzzySearch(stripped || rawName);
+      return KoromonsAPI.fuzzySearch(stripped || name);
     }
     return null;
   }
@@ -230,7 +345,7 @@
         '[class*="itemThumb"], [class*="thumbContainer"], [class*="itemImage"], ' +
         '[class*="itemCardThumb"], [class*="card-thumb"], [class*="cardImage"]'
       ) ||
-      anchor.querySelector("img")?.parentElement ||
+      (anchor.querySelector("img") && anchor.querySelector("img").parentElement) ||
       null
     );
   }
@@ -277,7 +392,8 @@
   }
 
   // ============================================================
-  // Mutation observer (Pekora paginates / lazy-loads catalog grids)
+  // Mutation observer (Pekora paginates / lazy-loads grids and
+  // profile inventory rows)
   // ============================================================
 
   function startObserving() {

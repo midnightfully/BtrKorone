@@ -5,7 +5,7 @@
 
 const BTRKORONE = {
   NAME: "BtrKorone",
-  VERSION: "2.6.0",
+  VERSION: "2.6.1",
 
   KORONE_BASE_URL: "https://www.pekora.zip",
   KORONE_GAMES_URL: "https://www.pekora.zip/games",
@@ -80,7 +80,7 @@ const BTRKORONE = {
     {
       id: "koromonsBadges",
       name: "Koromons Value Badges",
-      description: "Shows a Koromons gem indicator on item cards in trades and the catalog when the item has a tracked Koromons value",
+      description: "Shows a Koromons gem indicator on item cards across Pekora (catalog, trades, profile inventories) when the item has a tracked Koromons value",
       tier: 1,
       category: "trading",
       defaultEnabled: true
