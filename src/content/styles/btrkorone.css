@@ -497,7 +497,7 @@ body.btrkorone-active {
 
 
 /* ============================================================
- * KOROMONS VALUE BADGE (Plus tier feature: koromonsBadges)
+ * RARE ITEM BADGE (Plus tier feature: koromonsBadges)
  * Small blue gem icon overlaid on item cards in the catalog and
  * trade modal whose item resolves to a Koromons-tracked entry.
  * ============================================================ */
@@ -520,4 +520,125 @@ body.btrkorone-active {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* ============================================================
+ * KOROMONS BADGE DISPLAY (Plus tier feature: koromonsBadgeDisplay)
+ * Section injected onto Korone profile pages, directly below the
+ * existing game "Badges" row. Mirrors the RoliBadges layout: a
+ * horizontal grid of circular tiles with a green ring on earned
+ * badges and a grey ring on locked ones.
+ * ============================================================ */
+
+.btrkorone-koromons-badges-section {
+  margin: 0;
+  padding: 14px 18px 18px;
+  background: rgba(255, 255, 255, 0.025);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--btrk-text, #e0e0e0);
+}
+
+.btrk-kb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.btrk-kb-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: inherit;
+  letter-spacing: 0.2px;
+}
+
+.btrk-kb-seeall {
+  font-size: 13px;
+  font-weight: 600;
+  color: #a855f7;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btrk-kb-seeall:hover,
+.btrk-kb-seeall:focus-visible {
+  text-decoration: underline;
+  color: #c084fc;
+}
+
+.btrkorone-koromons-badges-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 16px;
+  align-items: flex-start;
+}
+
+.btrk-kb-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 80px;
+  text-align: center;
+  cursor: default;
+}
+
+.btrk-kb-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 4px solid #6b7280;        /* default grey ring (locked) */
+  background: rgba(40, 40, 50, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btrk-kb-tile:hover .btrk-kb-circle {
+  transform: scale(1.06);
+}
+
+.btrk-kb-tile.btrk-kb-earned .btrk-kb-circle {
+  border-color: #22c55e;            /* green ring */
+  background: rgba(34, 197, 94, 0.10);
+}
+
+.btrk-kb-tile.btrk-kb-locked {
+  opacity: 0.65;
+}
+
+.btrk-kb-tile.btrk-kb-locked .btrk-kb-icon {
+  filter: grayscale(0.6);
+  opacity: 0.85;
+}
+
+.btrk-kb-icon {
+  font-size: 26px;
+  line-height: 1;
+  user-select: none;
+}
+
+.btrk-kb-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: inherit;
+  width: 80px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.btrk-kb-loading,
+.btrk-kb-empty {
+  font-size: 12px;
+  color: var(--btrk-text-muted, #a0a0b0);
+  font-style: italic;
+  padding: 8px 4px;
 }

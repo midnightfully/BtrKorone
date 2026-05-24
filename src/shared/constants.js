@@ -5,7 +5,7 @@
 
 const BTRKORONE = {
   NAME: "BtrKorone",
-  VERSION: "2.6.1",
+  VERSION: "2.7.0",
 
   KORONE_BASE_URL: "https://www.pekora.zip",
   KORONE_GAMES_URL: "https://www.pekora.zip/games",
@@ -79,10 +79,18 @@ const BTRKORONE = {
     // PLUS TIER
     {
       id: "koromonsBadges",
-      name: "Koromons Value Badges",
-      description: "Shows a Koromons gem indicator on item cards across Pekora (catalog, trades, profile inventories) when the item has a tracked Koromons value",
+      name: "Rare Item Badges",
+      description: "Shows a small gem indicator on item cards across Pekora (catalog, trades, profile inventories) for items that are tracked by Koromons as rare/valued",
       tier: 1,
       category: "trading",
+      defaultEnabled: true
+    },
+    {
+      id: "koromonsBadgeDisplay",
+      name: "Koromons Badge Display",
+      description: "On Korone profile pages, fetches the user's Koromons badges (collector, hoarder, RAP-tier, custom badges) and displays them as a new section below the existing Badges row",
+      tier: 1,
+      category: "profile",
       defaultEnabled: true
     },
     // REX TIER
@@ -106,7 +114,8 @@ const BTRKORONE = {
 
   FEATURE_CATEGORIES: {
     games: { label: "Games", icon: "gamepad" },
-    trading: { label: "Trading", icon: "exchange" }
+    trading: { label: "Trading", icon: "exchange" },
+    profile: { label: "Profile", icon: "user" }
   }
 };
 
