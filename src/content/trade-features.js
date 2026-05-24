@@ -35,6 +35,7 @@
   let cachedMyUserId = null;
   let cachedTrades = [];
   let injectedTradeKey = null;
+  let pendingResolveKey = null; // dedupe in-flight resolution attempts
 
   function isTradePage() {
     return TRADE_PAGES.some(p => window.location.pathname.toLowerCase().includes(p.toLowerCase()));
@@ -78,15 +79,24 @@
   async function refreshTradeCache() {
     if (typeof PekoraAPI === "undefined") return;
     try {
-      const [inb, outb] = await Promise.all([
+      // Completed trades are needed for the "View Details" modal opened from
+      // the Completed tab - inbound/outbound alone won't contain them.
+      const [inb, outb, comp] = await Promise.all([
         PekoraAPI.getInboundTrades(),
-        PekoraAPI.getOutboundTrades()
+        PekoraAPI.getOutboundTrades(),
+        PekoraAPI.getCompletedTrades()
       ]);
       cachedTrades = [
-        ...((inb && inb.data) || []),
-        ...((outb && outb.data) || [])
+        ...((inb  && inb.data)  || []),
+        ...((outb && outb.data) || []),
+        ...((comp && comp.data) || [])
       ];
-      console.log(`[BtrKorone/Trades] Cached ${cachedTrades.length} trades`);
+      console.log(
+        `[BtrKorone/Trades] Cached ${cachedTrades.length} trades ` +
+        `(inbound: ${(inb && inb.data && inb.data.length) || 0}, ` +
+        `outbound: ${(outb && outb.data && outb.data.length) || 0}, ` +
+        `completed: ${(comp && comp.data && comp.data.length) || 0})`
+      );
     } catch (e) {
       console.warn("[BtrKorone/Trades] Could not pre-fetch trades:", e);
     }
@@ -105,28 +115,43 @@
   async function tryEnhanceVisibleModal() {
     const modal = findVisibleTradeModal();
     if (!modal) {
+      // Modal closed - reset both keys so the next open is a fresh attempt
       injectedTradeKey = null;
+      pendingResolveKey = null;
       return;
     }
 
     const modalKey = generateModalKey(modal);
-    if (modalKey === injectedTradeKey) return;
+    if (modalKey === injectedTradeKey) return;          // already injected
+    if (modalKey === pendingResolveKey) return;         // resolution in flight
+
     if (modal.querySelector(".btrk-trade-summary-panel, .btrk-section-summary")) {
       injectedTradeKey = modalKey;
       return;
     }
-    injectedTradeKey = modalKey;
 
-    const tradeId = await resolveTradeIdFromModal(modal);
-    if (!tradeId) {
-      console.log("[BtrKorone/Trades] Modal open but couldn't resolve trade ID; skipping.");
-      return;
+    pendingResolveKey = modalKey;
+    try {
+      const tradeId = await resolveTradeIdFromModal(modal);
+      if (!tradeId) {
+        // Don't stamp injectedTradeKey here - we want to retry on the next
+        // mutation event in case the cache was empty on the first attempt.
+        console.log("[BtrKorone/Trades] Modal open but couldn't resolve trade ID yet; will retry.");
+        return;
+      }
+      console.log(`[BtrKorone/Trades] Resolved trade ID: ${tradeId}`);
+
+      const detail = await PekoraAPI.getTradeDetail(tradeId);
+      if (!detail) {
+        console.warn(`[BtrKorone/Trades] getTradeDetail(${tradeId}) returned null`);
+        return;
+      }
+
+      enhanceModal(modal, detail);
+      injectedTradeKey = modalKey;                       // stamp ONLY on success
+    } finally {
+      pendingResolveKey = null;
     }
-
-    const detail = await PekoraAPI.getTradeDetail(tradeId);
-    if (!detail) return;
-
-    enhanceModal(modal, detail);
   }
 
   function findVisibleTradeModal() {
@@ -235,15 +260,17 @@
   // ============================================================
 
   function findSectionHeadings(modal) {
-    // Walk text nodes looking for "Items you will give" / "Items you will receive"
+    // Pending trades use future tense ("Items you will give/receive"),
+    // completed trades use past tense ("Items you gave/received").
+    // Match both.
     const walker = document.createTreeWalker(modal, NodeFilter.SHOW_TEXT);
     let give = null, receive = null;
     let node;
     while ((node = walker.nextNode())) {
       const t = (node.textContent || "").toLowerCase().trim();
       if (!t) continue;
-      if (!give && /^items you will give\b/.test(t)) give = node.parentElement;
-      else if (!receive && /^items you will receive\b/.test(t)) receive = node.parentElement;
+      if (!give    && /^items you (will give|gave)\b/.test(t))      give    = node.parentElement;
+      else if (!receive && /^items you (will receive|received)\b/.test(t)) receive = node.parentElement;
       if (give && receive) break;
     }
     return { give, receive };
