@@ -25,6 +25,20 @@
   // findCardAnchor's size heuristic filter out non-item images (avatars, etc).
   const THUMB_SRC_RX = /\/(images\/thumbnails|thumbnails|asset-thumbnail|item-thumbnail|asset)\//i;
 
+  // ============================================================
+  // MINIMAL MODE
+  // ------------------------------------------------------------
+  // When true, we don't surgically modify Pekora's modal DOM (no per-card
+  // pills, no section summary rows, no net-change indicator wedged between
+  // sections). Instead we append a single self-contained "Trade Analysis"
+  // panel near the modal footer. This guarantees we don't break Pekora's
+  // layout while still surfacing the verdict + values + demand.
+  //
+  // Set to false (or build a popup toggle) to re-enable the RoPro-style
+  // full injection once the layout interaction is sorted out.
+  // ============================================================
+  const MINIMAL_MODE = true;
+
   // Demand string -> 1-5 numeric rating
   const DEMAND_RATING = {
     "Very High": 5,
@@ -448,6 +462,13 @@
     const myCalc    = PekoraAPI.calculateOfferValue(myOffer    ? myOffer.userAssets    : []);
     const theirCalc = PekoraAPI.calculateOfferValue(theirOffer ? theirOffer.userAssets : []);
 
+    // Minimal mode: don't touch Pekora's modal DOM at all - just append a
+    // single self-contained verdict panel. Safe by construction.
+    if (MINIMAL_MODE) {
+      injectFallbackPanel(modal, myCalc, theirCalc);
+      return;
+    }
+
     const sections = findSectionHeadings(modal);
     if (!sections.give && !sections.receive) {
       console.warn("[BtrKorone/Trades] Could not locate give/receive headings; falling back to bottom panel.");
@@ -700,6 +721,13 @@
     const allItems = [...myCalc.items, ...theirCalc.items];
     const demandRating = computeDemandRating(allItems);
 
+    // Sums of Koromons-known values per side (separate from RAP fallback total)
+    const myKoroneVal = myCalc.items.reduce(
+      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0), 0);
+    const theirKoroneVal = theirCalc.items.reduce(
+      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0), 0);
+    const anyValued = (myKoroneVal + theirKoroneVal) > 0;
+
     const panel = document.createElement("div");
     panel.className = "btrk-trade-summary-panel";
     panel.innerHTML = `
@@ -716,6 +744,15 @@
           <span class="btrk-summary-label">Their Total Value</span>
           <span class="btrk-summary-val">${formatValue(theirValue)}</span>
         </div>
+        ${anyValued ? `
+        <div class="btrk-summary-row">
+          <span class="btrk-summary-label">Korone Rolimons Value (yours)</span>
+          <span class="btrk-summary-val">${formatValue(myKoroneVal)}</span>
+        </div>
+        <div class="btrk-summary-row">
+          <span class="btrk-summary-label">Korone Rolimons Value (theirs)</span>
+          <span class="btrk-summary-val">${formatValue(theirKoroneVal)}</span>
+        </div>` : ""}
         <div class="btrk-summary-row">
           <span class="btrk-summary-label">Korone Demand Rating</span>
           <span class="btrk-summary-val">${demandRating > 0 ? demandRating.toFixed(1) + "/5.0" : "Unknown"}</span>
@@ -728,13 +765,46 @@
       </div>
     `;
 
+    insertPanelIntoModal(modal, panel);
+  }
+
+  /**
+   * Append our verdict panel inside the modal in the safest possible spot:
+   * 1. Just before any element holding Accept/Counter/Decline buttons
+   * 2. Otherwise at the end of the modal-body
+   * 3. Otherwise at the end of the modal itself
+   * In every case the panel is APPENDED, never inserted between item cards,
+   * so it can't break Pekora's grid/flex layout.
+   */
+  function insertPanelIntoModal(modal, panel) {
+    // Strategy A: find a button row by looking for the Accept button text.
+    const buttons = modal.querySelectorAll("button, input[type='button'], input[type='submit'], a.button");
+    for (const btn of buttons) {
+      const t = (btn.textContent || btn.value || "").trim().toLowerCase();
+      if (t === "accept" || t === "counter" || t === "decline") {
+        // Walk up to a row container (with another button alongside it)
+        let row = btn.parentElement;
+        for (let i = 0; i < 4 && row && row.parentElement; i++) {
+          if (row.querySelectorAll("button, input[type='button']").length >= 2) {
+            row.parentElement.insertBefore(panel, row);
+            return;
+          }
+          row = row.parentElement;
+        }
+        break; // fall through to next strategy
+      }
+    }
+
+    // Strategy B: standard modal selectors
     const actionsRow = modal.querySelector(".modal-footer, .btn-group, .text-center");
     if (actionsRow && actionsRow.parentNode) {
       actionsRow.parentNode.insertBefore(panel, actionsRow);
-    } else {
-      const modalBody = modal.querySelector(".modal-body") || modal;
-      modalBody.appendChild(panel);
+      return;
     }
+
+    // Strategy C: just append to the modal body / modal
+    const modalBody = modal.querySelector(".modal-body") || modal;
+    modalBody.appendChild(panel);
   }
 
   // ============================================================
