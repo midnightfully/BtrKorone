@@ -39,8 +39,47 @@
   let injectedTradeKey = null;
   let pendingResolveKey = null; // dedupe in-flight resolution attempts
 
+  // Trade ID hint captured from the user's most recent click. The "View
+  // Details" link / button on a trade row almost always embeds the trade
+  // ID in onclick / href / data-* attributes; capturing it on click is far
+  // more reliable than trying to scrape the modal afterwards.
+  let lastTradeHint = { id: null, ts: 0 };
+  const HINT_TTL_MS = 8000;
+
   function isTradePage() {
     return TRADE_PAGES.some(p => window.location.pathname.toLowerCase().includes(p.toLowerCase()));
+  }
+
+  /**
+   * Install a capture-phase click listener that scans the clicked element
+   * (and a few ancestors) for anything that looks like a trade ID.
+   */
+  function installClickHintCapture() {
+    document.addEventListener("click", (e) => {
+      let el = e.target;
+      for (let depth = 0; depth < 6 && el && el.nodeType === 1; depth++) {
+        const out = (el.outerHTML || "").slice(0, 2000);
+        // Match common shapes:
+        //   data-trade-id="12345" / tradeid:12345 / trade=12345
+        //   ?id=12345 / &tradeid=12345 / /trades/12345
+        //   ShowTradeDetails(12345) / OpenTrade(12345)
+        const patterns = [
+          /(?:tradeid|trade[_-]?id|data-trade|data-id)\s*[="':\s]+(\d{4,10})/i,
+          /[?&](?:id|tradeid|trade)=(\d{4,10})/i,
+          /\/trades?\/(\d{4,10})/i,
+          /(?:ShowTrade|OpenTrade|ViewTrade)[^(]*\(\s*['"]?(\d{4,10})['"]?\s*[,)]/i
+        ];
+        for (const rx of patterns) {
+          const m = out.match(rx);
+          if (m) {
+            lastTradeHint = { id: m[1], ts: Date.now() };
+            console.log(`[BtrKorone/Trades] Click captured trade ID hint: ${m[1]}`);
+            return;
+          }
+        }
+        el = el.parentElement;
+      }
+    }, /* useCapture = */ true);
   }
 
   // ============================================================
@@ -74,6 +113,7 @@
     }
 
     console.log("[BtrKorone/Trades] Init for user:", cachedMyUserId);
+    installClickHintCapture();
     await refreshTradeCache();
     observeForTradeModal();
   }
@@ -221,30 +261,100 @@
   }
 
   async function resolveTradeIdFromModal(modal) {
-    const dataEl = modal.querySelector("[data-trade-id], [data-tradeid]");
-    if (dataEl) {
-      const id = dataEl.dataset.tradeId || dataEl.dataset.tradeid;
-      if (id) return id;
+    // 1. Click hint - the most reliable signal. The user just clicked a
+    //    "View Details" element that almost always carries the trade ID.
+    if (lastTradeHint.id && Date.now() - lastTradeHint.ts < HINT_TTL_MS) {
+      console.log(`[BtrKorone/Trades] Resolve via click hint: ${lastTradeHint.id}`);
+      return lastTradeHint.id;
     }
 
-    const idMatch = (modal.innerHTML || "").match(/trade[_-]?id["'\s:=/]+(\d{4,})/i);
-    if (idMatch) return idMatch[1];
-
-    const partnerName = extractPartnerName(modal);
-    if (partnerName) {
-      let match = cachedTrades.find(t =>
-        t.user && (t.user.name || "").toLowerCase() === partnerName.toLowerCase()
-      );
-      if (!match) {
-        await refreshTradeCache();
-        match = cachedTrades.find(t =>
-          t.user && (t.user.name || "").toLowerCase() === partnerName.toLowerCase()
-        );
+    // 2. Explicit data attributes on or inside the modal
+    const dataEl = modal.querySelector("[data-trade-id], [data-tradeid], [data-id]");
+    if (dataEl) {
+      const id =
+        dataEl.dataset.tradeId ||
+        dataEl.dataset.tradeid ||
+        dataEl.dataset.id;
+      if (id && /^\d{4,10}$/.test(id)) {
+        console.log(`[BtrKorone/Trades] Resolve via data-attr: ${id}`);
+        return id;
       }
-      if (match) return String(match.id);
+    }
+
+    // 3. Regex over the modal HTML for trade-id shaped substrings
+    const html = modal.innerHTML || "";
+    const regexes = [
+      /(?:tradeid|trade[_-]?id|data-trade|data-id)\s*[="':\s]+(\d{4,10})/i,
+      /[?&](?:id|tradeid|trade)=(\d{4,10})/i,
+      /\/trades?\/(\d{4,10})/i
+    ];
+    for (const rx of regexes) {
+      const m = html.match(rx);
+      if (m) {
+        console.log(`[BtrKorone/Trades] Resolve via HTML regex: ${m[1]}`);
+        return m[1];
+      }
+    }
+
+    // 4. Partner-name fallback - look up the trade in cache by partner name
+    const partnerName = extractPartnerName(modal);
+    console.log(`[BtrKorone/Trades] Extracted partner name: ${partnerName ? `"${partnerName}"` : "(none)"}`);
+    if (partnerName) {
+      let match = findCachedTradeByPartner(partnerName);
+      if (!match) {
+        // Refresh cache once and retry - the trade may be newer than our snapshot
+        console.log("[BtrKorone/Trades] No cache hit; refreshing cache and retrying.");
+        await refreshTradeCache();
+        match = findCachedTradeByPartner(partnerName);
+      }
+      if (match) {
+        console.log(`[BtrKorone/Trades] Resolve via cache-lookup: ${match.id}`);
+        return String(match.id);
+      }
+      // Help the user (and us) see why the lookup missed
+      const sample = cachedTrades.slice(0, 6)
+        .map(t => extractAnyName(t) || "?")
+        .join(", ");
+      console.log(`[BtrKorone/Trades] Cache miss for "${partnerName}". Sample of cached partner names: [${sample}]`);
     }
 
     return null;
+  }
+
+  /**
+   * Look up a cached trade by partner name. The list endpoint's user-field
+   * shape is inconsistent across inbound/outbound/completed, so we check
+   * every user-shaped slot we can find on each trade row.
+   */
+  function findCachedTradeByPartner(partnerName) {
+    const target = partnerName.toLowerCase();
+    return cachedTrades.find(t => {
+      const candidates = collectUserNames(t);
+      return candidates.some(n => n && n.toLowerCase() === target);
+    }) || null;
+  }
+
+  function collectUserNames(t) {
+    const out = [];
+    if (!t) return out;
+    const userish = [t.user, t.partner, t.sender, t.recipient, t.from, t.to];
+    if (Array.isArray(t.offers)) {
+      for (const o of t.offers) {
+        if (o && o.user) userish.push(o.user);
+      }
+    }
+    for (const u of userish) {
+      if (u && typeof u === "object") {
+        if (u.name) out.push(String(u.name));
+        if (u.username) out.push(String(u.username));
+        if (u.displayName) out.push(String(u.displayName));
+      }
+    }
+    return out;
+  }
+
+  function extractAnyName(t) {
+    return collectUserNames(t)[0] || null;
   }
 
   function extractPartnerName(modal) {
