@@ -384,10 +384,24 @@
     const circle = document.createElement("div");
     circle.className = "btrk-kb-circle";
 
-    const icon = document.createElement("span");
-    icon.className = "btrk-kb-icon";
-    icon.textContent = (display && display.icon) || "\uD83C\uDFC5"; // medal fallback
-    circle.appendChild(icon);
+    // Prefer an actual icon image if BADGE_DISPLAY supplies one; this is
+    // the path we'll switch to once Koromons' real icon URLs are wired
+    // up. Until then we fall back to the curated emoji and finally to
+    // a generic medal so unknown IDs still render.
+    if (display && display.iconUrl) {
+      const img = document.createElement("img");
+      img.className = "btrk-kb-icon btrk-kb-icon-img";
+      img.src = display.iconUrl;
+      img.alt = labelText;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      circle.appendChild(img);
+    } else {
+      const icon = document.createElement("span");
+      icon.className = "btrk-kb-icon";
+      icon.textContent = (display && display.icon) || "\uD83C\uDFC5"; // medal fallback
+      circle.appendChild(icon);
+    }
 
     const label = document.createElement("div");
     label.className = "btrk-kb-label";
@@ -407,10 +421,20 @@
     const circle = document.createElement("div");
     circle.className = "btrk-kb-circle";
 
-    const icon = document.createElement("span");
-    icon.className = "btrk-kb-icon";
-    icon.textContent = hb.icon || "\uD83D\uDC51"; // crown
-    circle.appendChild(icon);
+    if (hb.iconUrl || (typeof hb.icon === "string" && /^https?:\/\//.test(hb.icon))) {
+      const img = document.createElement("img");
+      img.className = "btrk-kb-icon btrk-kb-icon-img";
+      img.src = hb.iconUrl || hb.icon;
+      img.alt = labelText;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      circle.appendChild(img);
+    } else {
+      const icon = document.createElement("span");
+      icon.className = "btrk-kb-icon";
+      icon.textContent = hb.icon || "\uD83D\uDC51"; // crown
+      circle.appendChild(icon);
+    }
 
     const label = document.createElement("div");
     label.className = "btrk-kb-label";
@@ -437,10 +461,20 @@
       circle.style.background = hexToRgba(cb.color, 0.12);
     }
 
-    const icon = document.createElement("span");
-    icon.className = "btrk-kb-icon";
-    icon.textContent = cb.icon || "\u2B50"; // star
-    circle.appendChild(icon);
+    if (cb.iconUrl || (typeof cb.icon === "string" && /^https?:\/\//.test(cb.icon))) {
+      const img = document.createElement("img");
+      img.className = "btrk-kb-icon btrk-kb-icon-img";
+      img.src = cb.iconUrl || cb.icon;
+      img.alt = labelText;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      circle.appendChild(img);
+    } else {
+      const icon = document.createElement("span");
+      icon.className = "btrk-kb-icon";
+      icon.textContent = cb.icon || "\u2B50"; // star
+      circle.appendChild(icon);
+    }
 
     const label = document.createElement("div");
     label.className = "btrk-kb-label";
