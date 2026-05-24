@@ -99,12 +99,33 @@ const KoromonsAPI = {
       const acronym = (item.Acronym || item.acronym || "").toLowerCase().trim();
       const id = item.itemId || item.id;
 
-      if (name) this._itemMap[name] = item;
+      if (name) {
+        this._itemMap[name] = item;
+        // Also store under prefix-stripped form so reverse lookups work
+        const stripped = this._stripVendorPrefix(name);
+        if (stripped !== name) this._itemMap[stripped] = item;
+      }
       if (acronym) this._acronymMap[acronym] = item;
       if (id) this._idMap[String(id)] = item;
     }
 
     this._loaded = true;
+  },
+
+  /**
+   * Strip Pekora's vendor prefixes from item names.
+   * Pekora's trade/inventory APIs return names like "BIG: Silverthorn Antlers"
+   * or "Bundle: Halloween Knightmare", but Koromons stores them without
+   * the prefix. Without this, every prefixed item silently fails to match.
+   */
+  _stripVendorPrefix(name) {
+    if (!name) return name;
+    const lower = String(name).toLowerCase().trim();
+    const prefixes = ["big: ", "bundle: ", "big:", "bundle:"];
+    for (const p of prefixes) {
+      if (lower.startsWith(p)) return lower.slice(p.length).trim();
+    }
+    return lower;
   },
 
   // ============================================================
@@ -138,12 +159,20 @@ const KoromonsAPI = {
   // ============================================================
 
   /**
-   * Get item by exact name (case-insensitive)
+   * Get item by exact name (case-insensitive).
+   * Tries the raw name first, then strips vendor prefixes ("BIG: ", "Bundle: ").
    */
   getByName(name) {
     if (!name) return null;
     const key = name.toLowerCase().trim();
-    return this._itemMap[key] || this._acronymMap[key] || null;
+    const direct = this._itemMap[key] || this._acronymMap[key];
+    if (direct) return direct;
+
+    const stripped = this._stripVendorPrefix(key);
+    if (stripped !== key) {
+      return this._itemMap[stripped] || this._acronymMap[stripped] || null;
+    }
+    return null;
   },
 
   /**
@@ -161,7 +190,8 @@ const KoromonsAPI = {
   fuzzySearch(query) {
     if (!query || this._items.length === 0) return null;
 
-    const input = query.toLowerCase().trim();
+    // Strip vendor prefix first so "BIG: Foo" fuzzy-matches against "Foo"
+    const input = this._stripVendorPrefix(query.toLowerCase().trim());
     let bestMatch = null;
     let highestRatio = 0;
 
