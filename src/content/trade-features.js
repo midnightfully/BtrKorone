@@ -54,8 +54,12 @@
 
   let cachedMyUserId = null;
   let cachedTrades = [];
-  let injectedTradeKey = null;
-  let pendingResolveKey = null; // dedupe in-flight resolution attempts
+  // Per-modal stamping replaces the old global injectedTradeKey: we tag the
+  // modal element itself with `data-btrk-trade-id="<id>"` once enhanced, so
+  // dedup state lives with the DOM and survives rapid close/open cycles
+  // and click-different-trade flows. The only global state we need is a
+  // re-entry guard for in-flight async work on a particular modal element.
+  let pendingResolveModal = null;
 
   // Trade ID hint captured from the user's most recent click. The "View
   // Details" link / button on a trade row almost always embeds the trade
@@ -88,6 +92,12 @@
       if (data.type === "TRADE_FETCH") {
         const raw = String(data.tradeId || "");
         if (!/^\d{3,12}$/.test(raw)) return;
+        // A new trade is being fetched - if the cached detail belongs to a
+        // different trade, drop it immediately so we never paint trade A's
+        // values into trade B's modal in the gap between FETCH and DETAIL.
+        if (lastTradeDetail.id && lastTradeDetail.id !== raw) {
+          lastTradeDetail = { id: null, detail: null, ts: 0 };
+        }
         lastTradeHint = { id: raw, ts: Date.now() };
         console.log(`[BtrKorone/Trades] Fetch spy captured trade ID: ${raw}`);
         return;
@@ -233,54 +243,93 @@
   async function tryEnhanceVisibleModal() {
     const modal = findVisibleTradeModal();
     if (!modal) {
-      // Modal closed - reset both keys so the next open is a fresh attempt
-      injectedTradeKey = null;
-      pendingResolveKey = null;
+      pendingResolveModal = null;
       return;
     }
 
-    const modalKey = generateModalKey(modal);
-    if (modalKey === injectedTradeKey) return;          // already injected
-    if (modalKey === pendingResolveKey) return;         // resolution in flight
+    // Wait for the modal to finish its open-animation. Pekora's modal grows
+    // from a small rect; measuring DOM positions mid-animation produces
+    // wrong card anchors and net-change placement. The MutationObserver
+    // will fire again once the rect settles and we'll retry then.
+    const rect = modal.getBoundingClientRect();
+    if (rect.width < 300 || rect.height < 200) return;
 
-    if (modal.querySelector(".btrk-trade-summary-panel, .btrk-section-summary")) {
-      injectedTradeKey = modalKey;
-      return;
+    // Re-entry guard: don't kick off a second async resolve for the SAME
+    // modal element while one is in flight.
+    if (pendingResolveModal === modal) return;
+
+    // Identity-based dedup: the stamp lives on the modal element itself, so
+    // it can't collide with other trades' modal keys, can't get stuck in a
+    // global, and is automatically gone when Pekora removes the modal.
+    const stamped = modal.dataset.btrkTradeId || null;
+
+    // Pick the freshest trade ID we have. The hint is bumped on every
+    // TRADE_FETCH, the detail only after TRADE_DETAIL completes - so if
+    // detail.id !== hint.id, the detail is stale (a newer trade is being
+    // resolved) and we must NOT use it.
+    const hintFresh   = lastTradeHint.id   && (Date.now() - lastTradeHint.ts   < HINT_TTL_MS);
+    const detailFresh = lastTradeDetail.detail
+                     && lastTradeDetail.id === lastTradeHint.id
+                     && (Date.now() - lastTradeDetail.ts < HINT_TTL_MS);
+
+    let tradeId = null;
+    let detail  = null;
+    if (detailFresh) {
+      tradeId = lastTradeDetail.id;
+      detail  = lastTradeDetail.detail;
+    } else if (hintFresh) {
+      tradeId = lastTradeHint.id;
     }
 
-    pendingResolveKey = modalKey;
+    // Already correctly enhanced for the current trade - nothing to do.
+    if (stamped && tradeId && stamped === tradeId) return;
+
+    pendingResolveModal = modal;
     try {
-      // Fast path: if the page-spy already captured the full trade detail
-      // for this modal (it almost always does, because Pekora itself just
-      // fetched it to render the modal), use it directly. No refetch, no
-      // cache lookup, no DOM scraping.
-      if (lastTradeDetail.detail && Date.now() - lastTradeDetail.ts < HINT_TTL_MS) {
-        console.log(`[BtrKorone/Trades] Using spy-cached detail for trade ${lastTradeDetail.id}`);
-        enhanceModal(modal, lastTradeDetail.detail);
-        injectedTradeKey = modalKey;
-        return;
-      }
-
-      const tradeId = await resolveTradeIdFromModal(modal);
-      if (!tradeId) {
-        // Don't stamp injectedTradeKey here - we want to retry on the next
-        // mutation event in case the cache was empty on the first attempt.
-        console.log("[BtrKorone/Trades] Modal open but couldn't resolve trade ID yet; will retry.");
-        return;
-      }
-      console.log(`[BtrKorone/Trades] Resolved trade ID: ${tradeId}`);
-
-      const detail = await PekoraAPI.getTradeDetail(tradeId);
       if (!detail) {
-        console.warn(`[BtrKorone/Trades] getTradeDetail(${tradeId}) returned null`);
-        return;
+        tradeId = tradeId || await resolveTradeIdFromModal(modal);
+        if (!tradeId) {
+          // Don't stamp - the next mutation will retry once we have data.
+          console.log("[BtrKorone/Trades] Modal open but couldn't resolve trade ID yet; will retry.");
+          return;
+        }
+        console.log(`[BtrKorone/Trades] Resolved trade ID: ${tradeId}`);
+
+        detail = await PekoraAPI.getTradeDetail(tradeId);
+        if (!detail) {
+          console.warn(`[BtrKorone/Trades] getTradeDetail(${tradeId}) returned null`);
+          return;
+        }
+      } else {
+        console.log(`[BtrKorone/Trades] Using spy-cached detail for trade ${tradeId}`);
       }
 
+      // Idempotent: wipe any prior injection on this modal element before
+      // re-rendering. Handles two cases cleanly:
+      //   1. Pekora reused the modal DOM with different content (different
+      //      trade) - we tear down trade A's markers before drawing B's.
+      //   2. A previous attempt landed mid-animation and produced a partial
+      //      / misplaced render - we redo it now that the modal is stable.
+      clearInjections(modal);
       enhanceModal(modal, detail);
-      injectedTradeKey = modalKey;                       // stamp ONLY on success
+
+      // Stamp success so subsequent mutation fires for the same trade are
+      // a no-op.
+      modal.dataset.btrkTradeId = String(tradeId);
     } finally {
-      pendingResolveKey = null;
+      pendingResolveModal = null;
     }
+  }
+
+  /**
+   * Remove every element this feature injects into a trade modal. Used
+   * before re-rendering so we never stack stale markers from a previous
+   * trade or a partial earlier attempt.
+   */
+  function clearInjections(modal) {
+    modal.querySelectorAll(
+      ".btrkorone-value-badge, .btrk-net-change, .btrk-section-summary, .btrk-trade-summary-panel"
+    ).forEach(el => el.remove());
   }
 
   function findVisibleTradeModal() {
@@ -340,6 +389,9 @@
   }
 
   function generateModalKey(modal) {
+    // Retained for diagnostic logs only - dedup now uses a per-modal data
+    // attribute (see tryEnhanceVisibleModal). Returns a short fingerprint
+    // of the visible item names so console messages remain useful.
     const names = [...modal.querySelectorAll("a, .item-name, .text-truncate")]
       .map(el => el.textContent.trim())
       .filter(s => s.length > 2 && s.length < 80)
@@ -547,22 +599,33 @@
   }
 
   /**
-   * Walk up from <img> to find a sensible card anchor:
-   * a parent that visibly wraps the thumbnail (typically <a> or <div>).
-   * We stop as soon as we find an element with non-static layout potential
-   * (i.e. one we can flip to position:relative without disrupting siblings).
+   * Walk up from <img> to find the item-frame element to anchor a
+   * position:absolute badge to. We combine two signals - DOM structure
+   * (the frame's parent should be a row of 3-12 sibling cells, i.e. an
+   * items grid) and size sanity (the frame itself should be card-shaped) -
+   * so we don't get fooled by mid-animation rects or by random layout
+   * containers higher up the tree.
    */
   function findCardAnchor(img) {
-    let el = img.parentElement;
-    let depth = 0;
-    while (el && depth < 4) {
-      const rect = el.getBoundingClientRect();
-      // Card should be at least as big as the image but not the whole modal
-      if (rect.width >= 40 && rect.width <= 200 && rect.height >= 40 && rect.height <= 220) {
-        return el;
+    let el = img;
+    for (let depth = 0; depth < 6 && el && el.parentElement; depth++) {
+      const parent = el.parentElement;
+      const sibCount = parent.children.length;
+      if (sibCount >= 3 && sibCount <= 12) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width >= 40 && rect.width <= 250 && rect.height >= 40 && rect.height <= 260) {
+          return el;
+        }
       }
-      el = el.parentElement;
-      depth++;
+      el = parent;
+    }
+    // Fallback: pure size heuristic - preserves backward compat if the
+    // grid has an unusual sibling count.
+    let f = img.parentElement;
+    for (let i = 0; f && i < 4; i++) {
+      const r = f.getBoundingClientRect();
+      if (r.width >= 40 && r.width <= 200 && r.height >= 40 && r.height <= 220) return f;
+      f = f.parentElement;
     }
     return img.parentElement;
   }
