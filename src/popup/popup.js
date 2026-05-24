@@ -203,6 +203,12 @@ function setupActions() {
   //   - The buttons actually appear (some platforms hide them by default)
   // If a notification doesn't appear after clicking this, the problem is
   // an OS-level permission issue, not the trade-detection logic.
+  //
+  // We ALSO trigger a real `checkForNewTrades` poll here so the user
+  // doesn't have to wait up to a minute for the alarm. The SW console
+  // will log `Poll: N inbound total, M new since last check` so they
+  // can confirm the polling loop is alive and tell them exactly what's
+  // in their inbound list and how many were new.
   const btnTestNotif = document.getElementById("btn-test-notif");
   if (btnTestNotif) {
     btnTestNotif.addEventListener("click", async () => {
@@ -225,6 +231,11 @@ function setupActions() {
         if (!r || !r.success) {
           alert("Test notification failed: " + (r && r.error ? r.error : "unknown error"));
         }
+        // Fire a real poll right after the test notification - lets the
+        // user verify polling works without waiting for the next 1-min
+        // alarm tick. The SW console gets a "Poll: N inbound total, M
+        // new" log line either way.
+        chrome.runtime.sendMessage({ type: "FORCE_CHECK_TRADES" });
       } finally {
         setTimeout(() => { btnTestNotif.disabled = false; }, 800);
       }

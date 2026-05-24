@@ -137,6 +137,13 @@ async function handleMessage(message, sender) {
     case "DEBUG_TRADE_NOTIF_STATE":
       return await handleDebugTradeNotifState();
 
+    case "FORCE_CHECK_TRADES":
+      // Fire-and-forget so the popup doesn't have to wait
+      checkForNewTrades().catch(err =>
+        console.warn("[BtrKorone/TradeNotif] Forced check failed:", err)
+      );
+      return { success: true };
+
     default:
       return { error: "Unknown message type" };
   }
@@ -453,6 +460,17 @@ async function checkForNewTrades() {
 
   const newTrades = result.data.filter(
     t => typeof t.id === "number" && !previouslySeen.includes(t.id)
+  );
+
+  // Always log a poll summary so users can see the alarm is alive even
+  // when nothing's new. Distinguishes "alarm fired, 0 new" from "alarm
+  // never fired" - which used to be indistinguishable in the console.
+  console.log(
+    `[BtrKorone/TradeNotif] Poll: ${result.data.length} inbound total, ` +
+    `${newTrades.length} new since last check` +
+    (newTrades.length > 0
+      ? ` (ids: ${newTrades.map(t => t.id).join(", ")}).`
+      : `.`)
   );
 
   // Best-effort: ensure the Koromons catalog is loaded so value math is
