@@ -131,9 +131,61 @@ async function handleMessage(message, sender) {
     case "GET_CURRENT_PEKORA_USER":
       return await handleGetCurrentPekoraUser();
 
+    case "TEST_TRADE_NOTIFICATION":
+      return await handleTestTradeNotification();
+
+    case "DEBUG_TRADE_NOTIF_STATE":
+      return await handleDebugTradeNotifState();
+
     default:
       return { error: "Unknown message type" };
   }
+}
+
+/**
+ * Test path: fires a rich "Trade Inbound" notification with sample data,
+ * bypassing the Rex tier gate, the toggle gate, and the new-trade detection.
+ * Wired to the popup's "Test Notification" button so users can verify
+ * the format / OS notification permissions / button rendering without
+ * waiting for a real trade.
+ */
+async function handleTestTradeNotification() {
+  console.log("[BtrKorone/TradeNotif] TEST notification requested.");
+  const sampleTrade = {
+    id: 999999, // sentinel - decline button is disabled for test trades
+    user: { id: 1, name: "Jartans", displayName: "Jartans" },
+    __test: true
+  };
+  try {
+    await showTradeNotification(sampleTrade);
+    return { success: true };
+  } catch (e) {
+    console.error("[BtrKorone/TradeNotif] Test notification failed:", e);
+    return { success: false, error: (e && e.message) || String(e) };
+  }
+}
+
+/**
+ * Diagnostic: returns a snapshot of every gate that controls whether
+ * trade notifications fire. The popup surfaces this as a tooltip on
+ * the "Test Notification" link so users can self-diagnose without
+ * opening DevTools.
+ */
+async function handleDebugTradeNotifState() {
+  const tier = await BtrStorage.getPremiumTier();
+  const toggles = await BtrStorage.getFeatureToggles();
+  const stored = await chrome.storage.local.get([SEEN_TRADE_IDS_KEY]);
+  const userId = await BtrStorage.getUserId();
+  return {
+    tier,
+    tierLabel: tier === 0 ? "Free" : tier === 1 ? "Plus" : "Rex",
+    rexRequired: BTRKORONE.TIERS.REX.id,
+    tierPasses: tier >= BTRKORONE.TIERS.REX.id,
+    tradeNotificationsEnabled: toggles.tradeNotifications !== false,
+    seenIdsSnapshotted: Array.isArray(stored[SEEN_TRADE_IDS_KEY]),
+    seenIdsCount: Array.isArray(stored[SEEN_TRADE_IDS_KEY]) ? stored[SEEN_TRADE_IDS_KEY].length : 0,
+    userIdLinked: !!userId
+  };
 }
 
 // === Detect Currently Logged-In Pekora User (no linking required) ===
@@ -350,12 +402,22 @@ const notifTradeCache = new Map(); // notifId -> { tradeId, partnerId }
 
 async function checkForNewTrades() {
   // Gate by tier + feature toggle so this is a cheap no-op for users
-  // who haven't unlocked or have disabled the feature.
+  // who haven't unlocked or have disabled the feature. Every gate logs
+  // so users can self-diagnose from the service-worker DevTools console.
   const tier = await BtrStorage.getPremiumTier();
-  if (tier < BTRKORONE.TIERS.REX.id) return;
+  if (tier < BTRKORONE.TIERS.REX.id) {
+    console.log(
+      `[BtrKorone/TradeNotif] Skipped: tier ${tier} < Rex (${BTRKORONE.TIERS.REX.id}). ` +
+      `Verify your Rex subscription in the popup to enable trade notifications.`
+    );
+    return;
+  }
 
   const toggles = await BtrStorage.getFeatureToggles();
-  if (toggles.tradeNotifications === false) return;
+  if (toggles.tradeNotifications === false) {
+    console.log("[BtrKorone/TradeNotif] Skipped: tradeNotifications toggle is OFF.");
+    return;
+  }
 
   let result;
   try {
@@ -364,7 +426,13 @@ async function checkForNewTrades() {
     console.warn("[BtrKorone/TradeNotif] Inbound trades fetch failed:", err);
     return;
   }
-  if (!result || !Array.isArray(result.data)) return;
+  if (!result || !Array.isArray(result.data)) {
+    console.warn(
+      "[BtrKorone/TradeNotif] Inbound trades response had no data array. " +
+      "Are you logged in to pekora.zip in this browser?"
+    );
+    return;
+  }
 
   const stored = await chrome.storage.local.get([SEEN_TRADE_IDS_KEY]);
   const previouslySeen = stored[SEEN_TRADE_IDS_KEY];
@@ -421,19 +489,39 @@ async function showTradeNotification(trade) {
     "Someone";
   const partnerId = trade.user && trade.user.id;
   const notifId = TRADE_NOTIF_PREFIX + trade.id;
+  const isTest = trade.__test === true;
 
   const myUserId = await BtrStorage.getUserId();
 
-  // Fetch detail + avatar in parallel - both are independent.
-  const [detail, iconDataUrl] = await Promise.all([
-    PekoraAPI.getTradeDetail(trade.id).catch(() => null),
-    fetchAvatarAsDataUrl(partnerId).catch(() => null)
-  ]);
+  // Test notifications get hard-coded values + a fallback icon (no API
+  // calls, no auth required) so the test path works regardless of whether
+  // the user is logged in to Pekora or has a real trade waiting.
+  let detail = null;
+  let iconDataUrl = null;
+  if (isTest) {
+    iconDataUrl = null; // falls back to extension icon
+  } else {
+    [detail, iconDataUrl] = await Promise.all([
+      PekoraAPI.getTradeDetail(trade.id).catch(() => null),
+      fetchAvatarAsDataUrl(partnerId).catch(() => null)
+    ]);
+  }
 
   let messageLines;
   let contextMessage = "";
 
-  if (detail && myUserId) {
+  if (isTest) {
+    // Sample numbers chosen to match the screenshot the user shared.
+    const yourValue = 33000;
+    const theirValue = 32000;
+    const diff = theirValue - yourValue;
+    messageLines = [
+      `Partner: ${partnerName}`,
+      `Your Value: ${yourValue.toLocaleString()}`,
+      `Their Value: ${theirValue.toLocaleString()}`
+    ];
+    contextMessage = `Loss: ${diff.toLocaleString()} Value (TEST)`;
+  } else if (detail && myUserId) {
     const { myOffer, theirOffer } = PekoraAPI.splitTradeOffers(detail, Number(myUserId));
     const myAssets = (myOffer && myOffer.userAssets) || [];
     const theirAssets = (theirOffer && theirOffer.userAssets) || [];
@@ -600,8 +688,17 @@ chrome.notifications.onButtonClicked.addListener(async (notifId, buttonIndex) =>
   if (buttonIndex === 1) {
     // DECLINE -> POST against the trades API. We surface a small
     // follow-up notification to confirm success or report failure.
-    if (!tradeId) {
+    if (!tradeId || tradeId === 999999) {
+      // Test sentinel: no real trade to decline; just dismiss + confirm.
       chrome.notifications.clear(notifId);
+      notifTradeCache.delete(notifId);
+      chrome.notifications.create(notifId + "-test", {
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "Test Notification",
+        message: "Decline button works! (No real trade was declined.)",
+        priority: 0
+      });
       return;
     }
     try {
@@ -633,4 +730,24 @@ chrome.notifications.onButtonClicked.addListener(async (notifId, buttonIndex) =>
 async function resetTradeNotificationState() {
   await chrome.storage.local.remove(SEEN_TRADE_IDS_KEY);
 }
+
+// ------------------------------------------------------------
+// Immediate startup check (no 1-min wait)
+// ------------------------------------------------------------
+// MV3 alarms persist, but the very first poll after SW install or
+// after a browser restart can be up to a minute away. Kick off a check
+// on every SW startup so the user gets a fast first notification (or
+// a fast first-run snapshot) without having to wait. The check is
+// idempotent and gated, so duplicate calls are safe.
+checkForNewTrades().catch(err =>
+  console.warn("[BtrKorone/TradeNotif] Startup check failed:", err)
+);
+
+// Also re-run on browser startup (covers the case where Chrome was
+// just opened and onInstalled doesn't fire).
+chrome.runtime.onStartup.addListener(() => {
+  checkForNewTrades().catch(err =>
+    console.warn("[BtrKorone/TradeNotif] onStartup check failed:", err)
+  );
+});
 

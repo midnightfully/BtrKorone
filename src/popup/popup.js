@@ -194,6 +194,43 @@ function setupActions() {
     }
   });
 
+  // Test Notification - debug helper that fires a sample "Trade Inbound"
+  // notification with hard-coded values, bypassing every gate. Useful for
+  // verifying that:
+  //   - The OS notification permission is granted
+  //   - The notification format renders as expected (icon, multi-line body,
+  //     contextMessage line, two action buttons)
+  //   - The buttons actually appear (some platforms hide them by default)
+  // If a notification doesn't appear after clicking this, the problem is
+  // an OS-level permission issue, not the trade-detection logic.
+  const btnTestNotif = document.getElementById("btn-test-notif");
+  if (btnTestNotif) {
+    btnTestNotif.addEventListener("click", async () => {
+      btnTestNotif.disabled = true;
+      try {
+        // Show diagnostic info first so users with a real trade backlog
+        // understand why nothing's firing automatically.
+        const state = await chrome.runtime.sendMessage({ type: "DEBUG_TRADE_NOTIF_STATE" });
+        if (state && !state.tierPasses) {
+          console.warn(
+            `[BtrKorone] Trade notifications require Rex tier. ` +
+            `Current tier: ${state.tierLabel}. ` +
+            `(Test notification will still fire to verify OS-level setup.)`
+          );
+        }
+        if (state && !state.tradeNotificationsEnabled) {
+          console.warn("[BtrKorone] Trade notifications toggle is OFF.");
+        }
+        const r = await chrome.runtime.sendMessage({ type: "TEST_TRADE_NOTIFICATION" });
+        if (!r || !r.success) {
+          alert("Test notification failed: " + (r && r.error ? r.error : "unknown error"));
+        }
+      } finally {
+        setTimeout(() => { btnTestNotif.disabled = false; }, 800);
+      }
+    });
+  }
+
   document.getElementById("btn-manage").addEventListener("click", () => {
     if (currentStatus && currentStatus.userId) {
       window.open("https://www.pekora.zip/users/" + currentStatus.userId + "/profile", "_blank");
