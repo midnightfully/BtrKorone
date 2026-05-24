@@ -4,6 +4,7 @@
 
 let currentStatus = null;
 let featureState = null;
+let detectedPekoraUser = null; // ephemeral session detection (not stored)
 
 // Tier metadata for the bottom tabs
 const TIER_TABS = {
@@ -25,6 +26,25 @@ async function loadFullState() {
   currentStatus = await sendMessage({ type: "GET_STATUS" });
   featureState = await sendMessage({ type: "GET_FEATURE_STATE" });
   if (currentStatus) renderUI();
+
+  // If the user hasn't gone through the link flow yet, try detecting their
+  // active pekora.zip session so we can show their avatar + username
+  // without requiring verification.
+  if (currentStatus && !currentStatus.userId) {
+    const pekoraUser = await sendMessage({ type: "GET_CURRENT_PEKORA_USER" });
+    if (pekoraUser && pekoraUser.loggedIn) {
+      detectedPekoraUser = pekoraUser;
+      applyDetectedUser(pekoraUser);
+    }
+  }
+}
+
+function applyDetectedUser(user) {
+  if (!user) return;
+  const avatar = document.getElementById("user-avatar");
+  if (user.avatarUrl) avatar.src = user.avatarUrl;
+  document.getElementById("user-name").textContent =
+    user.username || `User ${user.userId}`;
 }
 
 function renderUI() {
@@ -227,6 +247,9 @@ function openVerifyModal() {
   if (currentStatus && currentStatus.userId) {
     document.getElementById("input-userid").value = currentStatus.userId;
     document.getElementById("btn-logout").style.display = "block";
+  } else if (detectedPekoraUser && detectedPekoraUser.userId) {
+    // Pre-fill with the detected session user so they don't have to type it
+    document.getElementById("input-userid").value = detectedPekoraUser.userId;
   }
 }
 
