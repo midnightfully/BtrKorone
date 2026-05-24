@@ -1,15 +1,11 @@
 /**
- * BtrKorone v2.5 - Content Script Styles
+ * BtrKorone v2.3 - Content Script Styles
  *
- * Two features ship styles:
+ * Currently only two features ship styles:
  *   - Play Button (Free tier)
- *   - Trade Modal Replacement (Rex tier)
+ *   - Trade Modal Enhancement (Rex tier)
  *
- * The trade modal is now a fully self-owned overlay (we hide Pekora's native
- * trade rows and render our own). All the old `.btrkorone-value-badge`,
- * `.btrk-net-change`, `.btrk-section-summary`, and `.btrk-trade-summary-panel`
- * rules from v2.4.x are gone - that approach injected into Pekora's modal
- * and was fragile. New rules are namespaced `.tm-*` to match the JS.
+ * Future features will be added here one at a time.
  */
 
 /* === CSS Variables === */
@@ -120,525 +116,380 @@ body.btrkorone-active {
 }
 
 /* ============================================================
-   TRADE MODAL REPLACEMENT (Rex tier)
-   --------------------------------------------------------------
-   Used on /My/Trades.aspx. We hide Pekora's native trade rows and
-   inject our own with a custom "View Details" button that opens a
-   self-owned modal. See src/content/trade-features.js.
+   TRADE MODAL ENHANCEMENT (Rex tier) - RoPro-style
+   Inserted directly inside Pekora's trade modal
    ============================================================ */
 
-/* === Custom rows inside Pekora's trades table === */
+/* === Per-card Robux value pill (top-right corner) === */
 
-.tm-injected td {
-  cursor: default;
-}
-.tm-td {
-  /* Match Pekora's table cell visuals - no extra borders or background
-     so we slot in cleanly between rows that haven't been hidden. */
-  padding: 6px 10px;
-  vertical-align: middle;
-}
-
-.tm-partner-cell {
-  display: flex;
+.btrkorone-value-badge {
+  /* Anchored to the bottom-left of the item frame, RoPro-style.
+     The card is flipped to position:relative by addBadgeToCard() if it
+     isn't already, so this absolute positioning lands inside the frame. */
+  position: absolute;
+  bottom: 5px;
+  left: 5px;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  background: rgba(12, 12, 18, 0.94);
+  color: #ffffff;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1;
+  z-index: 10;
+  pointer-events: auto;
+  cursor: default;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
-.tm-partner-cell img {
-  width: 30px;
-  height: 30px;
+
+.btrkorone-value-badge.btrk-rap-only {
+  background: rgba(12, 12, 18, 0.78);
+  color: #b8b8c8;
+  font-style: italic;
+}
+
+.btrkorone-value-badge .btrk-badge-robux {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  background: #2a2a3a;
+  background: linear-gradient(135deg, #34d171 0%, #1d9c5a 100%);
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
 }
-.tm-partner-cell p,
-.tm-partner-name {
-  margin: 0;
+
+.btrkorone-value-badge .btrk-badge-num {
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1px;
+}
+
+.btrkorone-value-badge.btrk-rap-only .btrk-badge-num {
+  color: #b8b8c8;
+}
+
+.btrkorone-value-badge .btrk-demand-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  margin-left: 1px;
+}
+
+/* === Per-section summary rows (under each "Value: R$ XXX") === */
+
+.btrk-section-summary {
+  margin-top: 8px;
+  padding: 4px 0 2px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
   color: inherit;
 }
 
-.tm-view-btn {
-  background: #2d7d46;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-weight: 700;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-.tm-view-btn:hover { background: #369952; }
-
-.tm-loading-row td {
-  color: #c0c0cc;
-  font-size: 12px;
-  padding: 10px !important;
-}
-
-/* === Modal overlay + container === */
-
-.tm-modal-bg {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  z-index: 99999;
+.btrk-section-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  /* Subtle fade-in */
-  animation: tm-fade-in 0.15s ease-out;
-}
-@keyframes tm-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  justify-content: space-between;
+  padding: 3px 0;
+  gap: 12px;
+  line-height: 1.35;
 }
 
-.tm-modal {
-  background: #2a2a3f;
-  border-radius: 12px;
-  width: 760px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 40px);
-  overflow: hidden;
-  position: relative;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #f0f0f5;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
-  /* Pop-in animation paired with the overlay fade */
-  animation: tm-pop-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes tm-pop-in {
-  from { transform: scale(0.96); opacity: 0; }
-  to   { transform: scale(1);    opacity: 1; }
-}
-
-.tm-modal-title {
-  text-align: center;
-  font-size: 17px;
-  font-weight: 800;
-  color: #ffffff;
-  padding: 14px 52px;
-  background: rgba(0, 0, 0, 0.18);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-  flex-shrink: 0;
-}
-
-.tm-modal-close {
-  position: absolute;
-  top: 11px;
-  right: 14px;
-  cursor: pointer;
+.btrk-section-row-muted {
   font-size: 11px;
-  font-weight: 900;
-  color: #d0d0d8;
-  width: 23px;
-  height: 23px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 2px solid #888;
-  line-height: 1;
-  user-select: none;
-  transition: color 0.15s, border-color 0.15s;
-}
-.tm-modal-close:hover {
-  color: #fff;
-  border-color: #fff;
+  margin-top: 2px;
+  opacity: 0.55;
 }
 
-/* === Body: sidebar + content === */
-
-.tm-modal-body {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
+.btrk-section-label {
+  color: inherit;
+  opacity: 0.72;
+  font-weight: 500;
+  white-space: nowrap;
+  letter-spacing: 0.1px;
 }
 
-.tm-sidebar {
-  width: 170px;
-  flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.14);
-  border-right: 1px solid rgba(255, 255, 255, 0.10);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 18px 14px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-.tm-sidebar::-webkit-scrollbar { width: 0; }
-
-.tm-sidebar-loading {
-  color: #aaa;
-  font-size: 12px;
-  text-align: center;
-  padding-top: 40px;
-}
-
-.tm-avatar {
-  width: 115px;
-  height: 115px;
-  border-radius: 8px;
-  object-fit: cover;
-  display: block;
-  margin-bottom: 11px;
-  background: #38384c;
-}
-
-.tm-trade-status {
-  font-size: 12px;
-  text-align: center;
-  color: #ececf2;
-  line-height: 1.5;
-  margin-bottom: 12px;
-  word-break: break-word;
-}
-.tm-trade-status .tm-partner-link {
-  color: #ffffff;
-  font-weight: 800;
-  text-decoration: none;
-}
-.tm-trade-status .tm-partner-link:hover {
-  text-decoration: underline;
-}
-
-.tm-diff {
-  font-size: 17px;
-  font-weight: 800;
-  margin-bottom: 14px;
-  letter-spacing: 0.2px;
-  font-variant-numeric: tabular-nums;
-}
-.tm-diff.pos { color: #00e87e; }
-.tm-diff.neg { color: #ff7872; }
-.tm-diff.neu { color: #c0c0cc; }
-
-.tm-sidebar-lbl {
-  font-size: 10px;
-  color: #c8c8d4;
-  margin-bottom: 4px;
-  margin-top: 8px;
-  width: 100%;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-.tm-sidebar-lbl:first-of-type {
-  margin-top: 0;
-}
-
-.tm-sidebar-valrow {
-  display: flex;
+.btrk-section-val {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  color: inherit;
   font-weight: 700;
-  width: 100%;
-  margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
 }
-.tm-sidebar-valrow.kol   { color: #ffc870; }
-.tm-sidebar-valrow.rap   { color: #4cd99a; }
-.tm-sidebar-valrow.robux { color: #00e87e; }
 
-/* === Value icons (the small coin-shaped K / R$ markers) === */
+.btrk-icon-rolimons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4fc3f7 0%, #1976d2 100%);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
 
-.tm-val-icon {
+/* === Net-change indicator (between give & receive sections) ===
+   RoPro-style: the value pill is centered between two horizontal
+   divider lines that flex-fill the remaining width on each side.
+   ============================================================ */
+
+.btrk-net-change {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Compact vertical footprint - Pekora's modal has a fixed background
+     and pushing too much content can spill the receive section below it. */
+  margin: 8px 0 6px;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 700;
+  width: 100%;
+  /* Borders intentionally removed - the side lines are drawn by the
+     flanking pseudo-elements so the pill itself can sit cleanly. */
+}
+
+.btrk-net-change::before,
+.btrk-net-change::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, rgba(160, 160, 180, 0), rgba(160, 160, 180, 0.30));
+  align-self: center;
+}
+
+.btrk-net-change::after {
+  background: linear-gradient(to right, rgba(160, 160, 180, 0.30), rgba(160, 160, 180, 0));
+}
+
+.btrk-net-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 14px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.btrk-net-change .btrk-net-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0;
+  /* Slightly chunkier on screen by stretching very mildly */
+  transform: scaleY(1.05);
+}
+
+.btrk-net-change .btrk-net-value {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.btrk-net-change .btrk-net-pct {
+  font-size: 13px;
+  opacity: 0.78;
+  font-weight: 600;
+}
+
+.btrk-net-profit { color: #22c55e; }
+.btrk-net-profit .btrk-net-arrow {
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.45);
+}
+
+.btrk-net-loss { color: #ef4444; }
+.btrk-net-loss .btrk-net-arrow {
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
+}
+
+.btrk-net-even { color: #fbbf24; }
+
+/* === Fallback summary panel (when section detection fails) === */
+
+.btrk-trade-summary-panel {
+  margin: 16px 0 8px;
+  padding: 0;
+  background: linear-gradient(135deg, #1a1a2e 0%, #2a2a40 100%);
+  border-radius: 8px;
+  border: 1px solid #3a3a55;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #e0e0e0;
+}
+
+.btrk-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid #2a2a40;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.btrk-summary-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.btrk-summary-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 12px;
+  font-weight: 800;
+  font-size: 18px;
+  border-bottom: 1px solid #2a2a40;
+}
+
+.btrk-summary-verdict.btrk-verdict-profit {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+}
+
+.btrk-summary-verdict.btrk-verdict-loss {
+  background: rgba(244, 67, 54, 0.12);
+  color: #f87171;
+}
+
+.btrk-summary-verdict.btrk-verdict-even {
+  background: rgba(255, 215, 0, 0.10);
+  color: #ffd700;
+}
+
+.btrk-verdict-arrow  { font-size: 22px; line-height: 1; }
+.btrk-verdict-amount { font-size: 20px; letter-spacing: 0.3px; font-variant-numeric: tabular-nums; }
+.btrk-verdict-pct    { font-size: 14px; opacity: 0.85; font-variant-numeric: tabular-nums; }
+
+/* === Side-by-side win/loss preview ("YOU GIVE" vs "YOU RECEIVE") === */
+
+.btrk-summary-sides {
+  display: flex;
+  align-items: stretch;
+  padding: 12px 14px 14px;
+  gap: 14px;
+}
+
+.btrk-summary-side {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btrk-summary-divider {
+  width: 1px;
+  align-self: stretch;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.12), transparent);
+  flex-shrink: 0;
+}
+
+.btrk-side-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #a0a0b0;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.btrk-side-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.btrk-side-row-muted { opacity: 0.55; }
+
+.btrk-side-row-meta {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a0a0b0;
+  margin-top: 2px;
+  /* Indent so the "Demand" tag aligns with the numeric column above */
+  padding-left: 23px;
+}
+
+.btrk-side-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  flex-shrink: 0;
   font-size: 9px;
   font-weight: 900;
   color: #ffffff;
   letter-spacing: -0.5px;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.40);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.30) inset;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  flex-shrink: 0;
 }
-.tm-val-icon.kol {
-  /* Amber Koromons-style coin */
+
+/* Robux pill - matches Pekora/Roblox green coin */
+.btrk-icon-robux {
+  background: linear-gradient(135deg, #34d171 0%, #1d9c5a 100%);
+}
+
+/* Koromons pill - distinct warm amber so it's never confused with R$ */
+.btrk-icon-koromons {
   background: linear-gradient(135deg, #ffb547 0%, #f59e0b 100%);
 }
-.tm-val-icon.rap,
-.tm-val-icon.robux {
-  /* Green Robux coin (matches Pekora/Roblox) */
-  background: linear-gradient(135deg, #34d171 0%, #1d9c5a 100%);
-  font-size: 7px;
+
+.btrk-side-num {
+  flex: 0 0 auto;
 }
 
-/* === Content area === */
-
-.tm-content {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  background: #2a2a3f;
-  scrollbar-width: thin;
-}
-.tm-content::-webkit-scrollbar { width: 0; }
-
-.tm-content-loading,
-.tm-error {
-  text-align: center;
-  padding: 40px 20px;
-  font-size: 13px;
-}
-.tm-content-loading { color: #c0c0cc; }
-.tm-error           { color: #ff7872; }
-
-.tm-section {
-  display: flex;
-  flex-direction: column;
-}
-.tm-section-label {
-  font-size: 13px;
-  font-weight: 800;
-  color: #ffffff;
-  margin: 0 0 10px;
-  letter-spacing: 0.2px;
-}
-
-.tm-item-grid {
-  display: flex;
-  gap: 10px;
-  flex-wrap: nowrap;
-  margin-bottom: 8px;
-  align-items: flex-start;
-}
-
-.tm-slot-empty-msg {
-  font-size: 12px;
-  color: #aaa;
-  font-style: italic;
-  padding: 30px 0;
-  width: 100%;
-  text-align: center;
-}
-
-.tm-slot {
-  width: 110px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.tm-slot-img-wrap {
-  position: relative;
-  width: 110px;
-  height: 110px;
-  background: #38384c;
-  border-radius: 8px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.tm-slot-img-wrap img {
-  width: 110px;
-  height: 110px;
-  object-fit: contain;
-  display: block;
-}
-
-.tm-slot-serial {
-  position: absolute;
-  bottom: 5px;
-  left: 4px;
-  background: rgba(10, 10, 10, 0.85);
-  border-radius: 4px;
-  font-size: 9px;
+.btrk-side-tag {
+  margin-left: auto;
+  font-size: 10px;
   font-weight: 700;
-  color: #ffd700;
-  padding: 1px 5px;
-  line-height: 1.4;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.tm-slot-uaid {
-  position: absolute;
-  bottom: 5px;
-  left: 4px;
-  background: rgba(10, 10, 10, 0.85);
-  border-radius: 4px;
-  font-size: 8px;
-  font-weight: 600;
-  color: #d0d0d8;
-  padding: 1px 5px;
-  line-height: 1.4;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #a0a0b0;
 }
 
-.tm-slot-name {
-  font-size: 11px;
-  color: #ffffff;
-  font-weight: 700;
-  margin: 6px 0 4px;
-  line-height: 1.35;
-  word-break: break-word;
-  max-width: 110px;
-  /* Two-line ellipsis */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.tm-slot-name a {
-  color: #ffffff;
-  text-decoration: none;
-}
-.tm-slot-name a:hover {
-  color: #6fb5ff;
-}
-
-.tm-slot-val-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.6;
-  font-variant-numeric: tabular-nums;
-}
-.tm-slot-val-row.kol { color: #ffc870; }
-.tm-slot-val-row.rap { color: #4cd99a; }
-
-/* === Per-section totals === */
-
-.tm-section-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin: 8px 0 16px;
-}
-.tm-section-total-label {
-  font-size: 12px;
-  color: #e0e0e8;
-  font-weight: 600;
-  padding-top: 2px;
-}
-.tm-section-total-vals {
+/* Old grid rows are no longer rendered, but we keep their styles harmless
+   so an in-flight injection (older cached page) doesn't look broken. */
+.btrk-summary-grid {
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-.tm-section-total-kol,
-.tm-section-total-rap {
-  display: flex;
-  align-items: center;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.tm-section-total-kol { color: #ffc870; }
-.tm-section-total-rap { color: #4cd99a; }
-
-.tm-section-robux {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: -6px 0 16px;
-  color: #00e87e;
-  font-weight: 700;
-  font-size: 12px;
-}
-.tm-section-robux > div {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.tm-divider {
-  border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
-  margin: 0 0 16px;
-}
-
-/* === Footer === */
-
-.tm-modal-footer {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(0, 0, 0, 0.18);
-  flex-shrink: 0;
-}
-
-.tm-btn-ok,
-.tm-btn-accept {
-  background: #2d7d46;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 9px 28px;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-}
-.tm-btn-ok:hover,
-.tm-btn-accept:hover {
-  background: #369952;
-}
-
-.tm-btn-counter,
-.tm-btn-decline {
-  background: transparent;
-  color: #f0f0f5;
-  border: 2px solid #777;
-  border-radius: 8px;
-  padding: 9px 28px;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.15s, background 0.15s;
-}
-.tm-btn-counter:hover,
-.tm-btn-decline:hover {
-  border-color: #bbb;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.tm-btn-ok:disabled,
-.tm-btn-accept:disabled,
-.tm-btn-counter:disabled,
-.tm-btn-decline:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-/* === Responsive: stack sidebar above content on narrow viewports === */
-
-@media (max-width: 720px) {
-  .tm-modal { width: 100%; max-width: calc(100vw - 24px); }
-  .tm-modal-body { flex-direction: column; }
-  .tm-sidebar {
-    width: auto;
-    border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    padding: 14px;
-  }
-  .tm-item-grid { flex-wrap: wrap; }
 }
