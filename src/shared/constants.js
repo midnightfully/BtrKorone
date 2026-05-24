@@ -5,7 +5,7 @@
 
 const BTRKORONE = {
   NAME: "BtrKorone",
-  VERSION: "2.3.4",
+  VERSION: "2.4.0",
 
   KORONE_BASE_URL: "https://www.pekora.zip",
   KORONE_GAMES_URL: "https://www.pekora.zip/games",
@@ -66,6 +66,14 @@ const BTRKORONE = {
       id: "tradeModal",
       name: "Trade Modal Enhancement",
       description: "Adds Koromons values, demand ratings, and trade verdict inside the Pekora trade modal",
+      tier: 2,
+      category: "trading",
+      defaultEnabled: true
+    },
+    {
+      id: "tradeNotifications",
+      name: "Trade Notifications",
+      description: "Shows a desktop notification when you receive a new trade request",
       tier: 2,
       category: "trading",
       defaultEnabled: true
