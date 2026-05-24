@@ -261,7 +261,9 @@ body.btrkorone-active {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 16px 0 14px;
+  /* Compact vertical footprint - Pekora's modal has a fixed background
+     and pushing too much content can spill the receive section below it. */
+  margin: 8px 0 6px;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-weight: 700;

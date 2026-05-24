@@ -474,28 +474,26 @@
     }
 
     const sections = findSectionHeadings(modal);
-    if (!sections.give && !sections.receive) {
-      console.warn("[BtrKorone/Trades] Could not locate give/receive headings; falling back to bottom panel.");
+    // Need BOTH headings for the inline injection - the percentage indicator
+    // is anchored at the boundary between the two subtrees. If either is
+    // missing, fall back to the self-contained bottom panel.
+    if (!sections.give || !sections.receive) {
+      console.warn("[BtrKorone/Trades] Could not locate both give/receive headings; falling back to bottom panel.");
       injectFallbackPanel(modal, myCalc, theirCalc);
       return;
     }
 
-    // 1. Per-card badges
-    if (sections.give) {
-      badgeItemsBetween(modal, sections.give, sections.receive, myCalc.items);
-    }
-    if (sections.receive) {
-      badgeItemsBetween(modal, sections.receive, null, theirCalc.items);
-    }
+    // 1. Bottom-left value pill on every item frame.
+    badgeItemsBetween(modal, sections.give, sections.receive, myCalc.items);
+    badgeItemsBetween(modal, sections.receive, null, theirCalc.items);
 
-    // 2. Per-section summary rows
-    if (sections.give)    injectSectionSummary(sections.give,    myCalc,    "give");
-    if (sections.receive) injectSectionSummary(sections.receive, theirCalc, "receive");
+    // 2. Centered up/down percentage banner between the two sections.
+    injectNetChange(modal, sections, myCalc, theirCalc);
 
-    // 3. Net change between sections
-    if (sections.give && sections.receive) {
-      injectNetChange(sections.receive, myCalc, theirCalc);
-    }
+    // (Per-section summary rows removed: redundant with Pekora's native
+    // "Value: R$ XXX" line + fragile when Pekora's section markup is flat
+    // rather than nested. The user gets the deltas via the centered banner
+    // and the bottom-panel fallback in unusual layouts.)
   }
 
   // ============================================================
@@ -666,7 +664,49 @@
   // NET CHANGE INDICATOR
   // ============================================================
 
-  function injectNetChange(receiveHeading, myCalc, theirCalc) {
+  /**
+   * Walk up from the receive heading until we find the ancestor whose
+   * parent also contains the give heading - that ancestor IS the receive
+   * subtree, and its previous sibling (or the give subtree) is the give
+   * side. Inserting before this anchor lands the percentage banner at the
+   * exact give-vs-receive boundary, in both layout shapes:
+   *
+   * 1. Flat (everything siblings of one container):
+   *      <body>
+   *        <h2>GIVE</h2>
+   *        <div class="grid">...</div>
+   *        <h2>RECEIVE</h2>     <-- anchor
+   *        <div class="grid">...</div>
+   *      </body>
+   *
+   * 2. Nested (each section in its own wrapper):
+   *      <body>
+   *        <div class="give-section">...</div>
+   *        <div class="receive-section">      <-- anchor
+   *          <h2>RECEIVE</h2>
+   *          ...
+   *        </div>
+   *      </body>
+   *
+   * In both cases the indicator slots in cleanly between the two halves
+   * without pushing it to the very top of the items column.
+   */
+  function findNetChangeAnchor(modal, receiveHeading, giveHeading) {
+    if (!receiveHeading || !giveHeading) return receiveHeading;
+    let el = receiveHeading;
+    for (let depth = 0; depth < 12 && el && el !== modal && el.parentElement; depth++) {
+      const parent = el.parentElement;
+      if (parent.contains(giveHeading) && !el.contains(giveHeading) && el !== giveHeading) {
+        return el;
+      }
+      el = parent;
+    }
+    // Should be unreachable for any reasonable modal structure - degrade
+    // to the heading itself rather than null so insertion still happens.
+    return receiveHeading;
+  }
+
+  function injectNetChange(modal, sections, myCalc, theirCalc) {
     const myValue    = effectiveTotal(myCalc);
     const theirValue = effectiveTotal(theirCalc);
 
@@ -690,12 +730,9 @@
     `;
     indicator.title = `You give ${formatValue(myValue)} \u2022 You receive ${formatValue(theirValue)}`;
 
-    // Place the indicator immediately before the "Items you will receive" section
-    const receiveContainer = findSectionContainer(receiveHeading);
-    if (receiveContainer && receiveContainer.parentNode) {
-      receiveContainer.parentNode.insertBefore(indicator, receiveContainer);
-    } else if (receiveHeading.parentNode) {
-      receiveHeading.parentNode.insertBefore(indicator, receiveHeading);
+    const anchor = findNetChangeAnchor(modal, sections.receive, sections.give);
+    if (anchor && anchor.parentNode) {
+      anchor.parentNode.insertBefore(indicator, anchor);
     }
   }
 
