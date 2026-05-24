@@ -139,14 +139,20 @@
       const placeId = extractPlaceId(card);
       if (!placeId) return;
 
-      card.classList.add("btrk-play-injected");
-      // Make sure the button anchors correctly inside the card
-      if (getComputedStyle(card).position === "static") {
-        card.style.position = "relative";
+      // Anchor the button inside the thumbnail container if we can find one,
+      // otherwise fall back to the whole card.
+      const anchor = findThumbAnchor(card) || card;
+      if (anchor.querySelector(".btrkorone-play-btn")) {
+        card.classList.add("btrk-play-injected");
+        return;
+      }
+      if (getComputedStyle(anchor).position === "static") {
+        anchor.style.position = "relative";
       }
 
       const btn = createPlayButton(placeId);
-      card.appendChild(btn);
+      anchor.appendChild(btn);
+      card.classList.add("btrk-play-injected");
       injected++;
     });
 
@@ -156,6 +162,21 @@
 
     // Also add a large play button on game detail pages
     injectDetailPagePlayButton();
+  }
+
+  /**
+   * Pekora wraps each card's thumbnail in a div like:
+   *   <div class="gameCardThumbContainer-0-2-149">...</div>
+   * We anchor inside it so the play button lives over the icon, not over
+   * the title or vote bar.
+   */
+  function findThumbAnchor(card) {
+    return (
+      card.querySelector('[class*="gameCardThumbContainer"]') ||
+      card.querySelector('[class*="thumbContainer"]') ||
+      card.querySelector('[class*="gameCardThumb"]') ||
+      null
+    );
   }
 
   /**
