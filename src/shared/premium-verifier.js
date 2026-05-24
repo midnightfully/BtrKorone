@@ -148,6 +148,37 @@ const PremiumVerifier = {
     };
   },
 
+  // === Account Link Only (no gamepass check) ===
+  // Used by the "Link Account" button. Confirms the user owns the Korone
+  // account by checking their About Me for the verification token, then
+  // caches their username + avatar. Premium tier is NOT touched here -
+  // a separate "Verify Subscription" button will handle that later.
+
+  async performAccountLink(userId, token) {
+    const tokenResult = await this.verifyKoroneToken(userId, token);
+    if (!tokenResult.verified) {
+      return {
+        success: false,
+        error: tokenResult.error,
+        message: tokenResult.error === "PROFILE_FETCH_FAILED"
+          ? "Could not fetch your Korone profile. Make sure you're logged in to pekora.zip."
+          : "Verification token not found in your Korone About Me section. Make sure you saved it."
+      };
+    }
+
+    const profile = await this.fetchPekoraProfile(userId);
+    const username = profile ? (profile.name || profile.username || profile.displayName) : null;
+    const avatarUrl = this.getAvatarUrl(userId);
+
+    return {
+      success: true,
+      username,
+      avatarUrl,
+      error: null,
+      message: "Account linked successfully!"
+    };
+  },
+
   // === Background Recheck ===
 
   async recheckOwnership(userId) {

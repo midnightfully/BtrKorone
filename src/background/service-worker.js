@@ -32,6 +32,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     periodInMinutes: 30
   });
 
+  // Set up trade-notification polling alarm (every 1 min - the MV3 minimum
+  // for installed extensions). The actual check is gated by tier + toggle
+  // inside the handler, so it's a no-op for users who don't have it on.
+  chrome.alarms.create(TRADE_NOTIF_ALARM, { periodInMinutes: 1 });
+
   // Initial Koromons cache load
   KoromonsAPI.refresh();
 });
@@ -45,6 +50,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "btrkorone_koromons_refresh") {
     console.log("[BtrKorone] Refreshing Koromons item cache...");
     await KoromonsAPI.refresh();
+  }
+  if (alarm.name === TRADE_NOTIF_ALARM) {
+    await checkForNewTrades();
   }
 });
 
@@ -96,6 +104,9 @@ async function handleMessage(message, sender) {
     case "GENERATE_TOKEN":
       return await handleGenerateToken(message.userId);
 
+    case "LINK_ACCOUNT":
+      return await handleLinkAccount(message.userId, message.token);
+
     case "VERIFY_PREMIUM":
       return await handleVerifyPremium(message.userId, message.token);
 
@@ -128,6 +139,12 @@ async function handleToggleFeature(featureId, enabled) {
   if (!featureId) return { error: "Missing featureId" };
 
   await BtrStorage.setFeatureToggle(featureId, enabled);
+
+  // Side effects per feature
+  if (featureId === "tradeNotifications" && !enabled) {
+    await resetTradeNotificationState();
+  }
+
   broadcastMessage({ type: "FEATURE_TOGGLED", featureId, enabled });
   return { success: true, featureId, enabled };
 }
@@ -169,6 +186,34 @@ async function handleGenerateToken(userId) {
     username,
     instructions: `Place this token in your Korone About Me section: ${token}`
   };
+}
+
+// === Account Linking (no gamepass check) ===
+
+async function handleLinkAccount(userId, token) {
+  if (!userId || !token) {
+    return { error: "Missing userId or token for account linking." };
+  }
+
+  const result = await PremiumVerifier.performAccountLink(userId, token);
+
+  if (result.success) {
+    // Cache identity but DO NOT touch the premium tier - that's the job of
+    // the future "Verify Subscription" button.
+    await BtrStorage.setVerificationTimestamp(Date.now());
+    if (result.username) {
+      await BtrStorage.setCachedUsername(result.username);
+    }
+    if (result.avatarUrl) {
+      await BtrStorage.setCachedAvatarUrl(result.avatarUrl);
+    }
+  } else if (result.username || result.avatarUrl) {
+    // Even on failure, cache anything we managed to get
+    if (result.username) await BtrStorage.setCachedUsername(result.username);
+    if (result.avatarUrl) await BtrStorage.setCachedAvatarUrl(result.avatarUrl);
+  }
+
+  return result;
 }
 
 // === Premium Verification ===
@@ -243,3 +288,100 @@ function broadcastMessage(message) {
     }
   });
 }
+
+// ============================================================
+// TRADE NOTIFICATIONS (Rex tier)
+// ------------------------------------------------------------
+// Poll Pekora's inbound-trades endpoint every minute. On the very
+// first run we just record the IDs so we don't fire a wave of
+// notifications for old trades. On subsequent runs we notify for
+// any trade ID we haven't seen before.
+// ============================================================
+
+const TRADE_NOTIF_ALARM = "btrkorone_check_trades";
+const SEEN_TRADE_IDS_KEY = "btrkorone_seen_trade_ids";
+const TRADE_NOTIF_PREFIX = "btrk-trade-";
+const SEEN_IDS_MAX = 200; // hard cap so storage doesn't grow forever
+
+async function checkForNewTrades() {
+  // Gate by tier + feature toggle so this is a cheap no-op for users
+  // who haven't unlocked or have disabled the feature.
+  const tier = await BtrStorage.getPremiumTier();
+  if (tier < BTRKORONE.TIERS.REX.id) return;
+
+  const toggles = await BtrStorage.getFeatureToggles();
+  if (toggles.tradeNotifications === false) return;
+
+  let result;
+  try {
+    result = await PekoraAPI.getInboundTrades();
+  } catch (err) {
+    console.warn("[BtrKorone/TradeNotif] Inbound trades fetch failed:", err);
+    return;
+  }
+  if (!result || !Array.isArray(result.data)) return;
+
+  const stored = await chrome.storage.local.get([SEEN_TRADE_IDS_KEY]);
+  const previouslySeen = stored[SEEN_TRADE_IDS_KEY];
+  const isFirstRun = !Array.isArray(previouslySeen);
+
+  const currentIds = result.data.map(t => t.id).filter(id => typeof id === "number");
+
+  if (isFirstRun) {
+    // Don't notify on first run; just snapshot what's already there
+    await chrome.storage.local.set({
+      [SEEN_TRADE_IDS_KEY]: currentIds.slice(0, SEEN_IDS_MAX)
+    });
+    console.log(
+      `[BtrKorone/TradeNotif] First run: snapshotted ${currentIds.length} existing trade(s); no notifications sent.`
+    );
+    return;
+  }
+
+  const newTrades = result.data.filter(
+    t => typeof t.id === "number" && !previouslySeen.includes(t.id)
+  );
+
+  for (const trade of newTrades) {
+    showTradeNotification(trade);
+  }
+
+  if (newTrades.length > 0) {
+    console.log(
+      `[BtrKorone/TradeNotif] Notified for ${newTrades.length} new trade(s).`
+    );
+  }
+
+  // Update the seen list - keep the most recent SEEN_IDS_MAX ids
+  const merged = [...new Set([...currentIds, ...previouslySeen])].slice(0, SEEN_IDS_MAX);
+  await chrome.storage.local.set({ [SEEN_TRADE_IDS_KEY]: merged });
+}
+
+function showTradeNotification(trade) {
+  const partnerName =
+    (trade.user && (trade.user.name || trade.user.username)) || "Someone";
+  const notifId = TRADE_NOTIF_PREFIX + trade.id;
+
+  chrome.notifications.create(notifId, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+    title: "New Trade Request",
+    message: `${partnerName} sent you a trade request`,
+    priority: 1,
+    requireInteraction: false
+  });
+}
+
+// Click on a trade notification -> open the Korone trades page
+chrome.notifications.onClicked.addListener((notifId) => {
+  if (typeof notifId !== "string" || !notifId.startsWith(TRADE_NOTIF_PREFIX)) return;
+  chrome.tabs.create({ url: "https://www.pekora.zip/My/Trades.aspx" });
+  chrome.notifications.clear(notifId);
+});
+
+// When the user toggles tradeNotifications off, reset the seen-IDs
+// snapshot so re-enabling later doesn't blast them with backlog.
+async function resetTradeNotificationState() {
+  await chrome.storage.local.remove(SEEN_TRADE_IDS_KEY);
+}
+
