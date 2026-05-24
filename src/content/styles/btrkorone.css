@@ -124,16 +124,16 @@ body.btrkorone-active {
 
 .btrkorone-value-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 5px;
+  right: 5px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 7px;
-  background: rgba(15, 15, 22, 0.92);
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  background: rgba(12, 12, 18, 0.94);
   color: #ffffff;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   font-size: 11px;
   font-weight: 700;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -141,12 +141,14 @@ body.btrkorone-active {
   z-index: 10;
   pointer-events: auto;
   cursor: default;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 .btrkorone-value-badge.btrk-rap-only {
-  background: rgba(15, 15, 22, 0.78);
-  color: #c0c0d0;
+  background: rgba(12, 12, 18, 0.78);
+  color: #b8b8c8;
   font-style: italic;
 }
 
@@ -154,25 +156,28 @@ body.btrkorone-active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2fbf71 0%, #1d9c5a 100%);
+  background: linear-gradient(135deg, #34d171 0%, #1d9c5a 100%);
   color: #ffffff;
   font-size: 8px;
   font-weight: 900;
   letter-spacing: -0.5px;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
 }
 
 .btrkorone-value-badge .btrk-badge-num {
   color: #ffffff;
   font-weight: 800;
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1px;
 }
 
 .btrkorone-value-badge.btrk-rap-only .btrk-badge-num {
-  color: #c0c0d0;
+  color: #b8b8c8;
 }
 
 .btrkorone-value-badge .btrk-demand-dot {
@@ -181,14 +186,15 @@ body.btrkorone-active {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  margin-left: 1px;
 }
 
 /* === Per-section summary rows (under each "Value: R$ XXX") === */
 
 .btrk-section-summary {
-  margin-top: 6px;
-  padding: 6px 0 4px;
+  margin-top: 8px;
+  padding: 4px 0 2px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
   color: inherit;
@@ -198,26 +204,29 @@ body.btrkorone-active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px 0;
-  gap: 10px;
+  padding: 3px 0;
+  gap: 12px;
+  line-height: 1.35;
 }
 
 .btrk-section-row-muted {
   font-size: 11px;
-  opacity: 0.65;
+  margin-top: 2px;
+  opacity: 0.55;
 }
 
 .btrk-section-label {
   color: inherit;
-  opacity: 0.85;
+  opacity: 0.72;
   font-weight: 500;
   white-space: nowrap;
+  letter-spacing: 0.1px;
 }
 
 .btrk-section-val {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   color: inherit;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -227,55 +236,92 @@ body.btrkorone-active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   background: linear-gradient(135deg, #4fc3f7 0%, #1976d2 100%);
   color: #ffffff;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 900;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
 }
 
-/* === Net-change indicator (between give & receive sections) === */
+/* === Net-change indicator (between give & receive sections) ===
+   RoPro-style: the value pill is centered between two horizontal
+   divider lines that flex-fill the remaining width on each side.
+   ============================================================ */
 
 .btrk-net-change {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  margin: 14px auto;
-  padding: 6px 14px;
+  margin: 16px 0 14px;
+  padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 16px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  border-top: 1px solid rgba(128, 128, 128, 0.25);
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  font-weight: 700;
   width: 100%;
+  /* Borders intentionally removed - the side lines are drawn by the
+     flanking pseudo-elements so the pill itself can sit cleanly. */
+}
+
+.btrk-net-change::before,
+.btrk-net-change::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, rgba(160, 160, 180, 0), rgba(160, 160, 180, 0.30));
+  align-self: center;
+}
+
+.btrk-net-change::after {
+  background: linear-gradient(to right, rgba(160, 160, 180, 0.30), rgba(160, 160, 180, 0));
+}
+
+.btrk-net-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 14px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
 }
 
 .btrk-net-change .btrk-net-arrow {
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
   line-height: 1;
+  letter-spacing: 0;
+  /* Slightly chunkier on screen by stretching very mildly */
+  transform: scaleY(1.05);
 }
 
 .btrk-net-change .btrk-net-value {
   font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
 }
 
 .btrk-net-change .btrk-net-pct {
   font-size: 13px;
-  opacity: 0.85;
-  font-weight: 700;
+  opacity: 0.78;
+  font-weight: 600;
 }
 
 .btrk-net-profit { color: #22c55e; }
-.btrk-net-profit .btrk-net-arrow { text-shadow: 0 0 8px rgba(34, 197, 94, 0.45); }
+.btrk-net-profit .btrk-net-arrow {
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.45);
+}
 
 .btrk-net-loss { color: #ef4444; }
-.btrk-net-loss .btrk-net-arrow { text-shadow: 0 0 8px rgba(239, 68, 68, 0.45); }
+.btrk-net-loss .btrk-net-arrow {
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
+}
 
 .btrk-net-even { color: #fbbf24; }
 

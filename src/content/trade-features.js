@@ -406,16 +406,20 @@
     const diff = theirValue - myValue;
     const pct = myValue > 0 ? (diff / myValue) * 100 : 0;
 
-    let cls = "btrk-net-even", arrow = "↔", sign = "";
-    if (diff > 0)      { cls = "btrk-net-profit"; arrow = "↑"; sign = "+"; }
-    else if (diff < 0) { cls = "btrk-net-loss";   arrow = "↓"; sign = "";  } // formatValue handles minus
+    // Filled triangles read more cleanly than line arrows at small sizes
+    // and match the RoPro reference UI.
+    let cls = "btrk-net-even", arrow = "\u25B6", sign = "";   // ▶ for even
+    if (diff > 0)      { cls = "btrk-net-profit"; arrow = "\u25B2"; sign = "+"; } // ▲
+    else if (diff < 0) { cls = "btrk-net-loss";   arrow = "\u25BC"; sign = "";  } // ▼ (formatValue handles minus)
 
     const indicator = document.createElement("div");
     indicator.className = `btrk-net-change ${cls}`;
     indicator.innerHTML = `
-      <span class="btrk-net-arrow">${arrow}</span>
-      <span class="btrk-net-value">${sign}${formatValue(diff)}</span>
-      <span class="btrk-net-pct">(${sign}${pct.toFixed(0)}%)</span>
+      <span class="btrk-net-inner">
+        <span class="btrk-net-arrow">${arrow}</span>
+        <span class="btrk-net-value">${sign}${formatValue(diff)}</span>
+        <span class="btrk-net-pct">(${sign}${pct.toFixed(0)}%)</span>
+      </span>
     `;
     indicator.title = `You give ${formatValue(myValue)} \u2022 You receive ${formatValue(theirValue)}`;
 
@@ -448,9 +452,9 @@
     const diff = theirValue - myValue;
     const pct = myValue > 0 ? ((diff / myValue) * 100).toFixed(1) : 0;
 
-    let verdictClass = "btrk-verdict-even", arrow = "↔";
-    if (diff > 0)      { verdictClass = "btrk-verdict-profit"; arrow = "↑"; }
-    else if (diff < 0) { verdictClass = "btrk-verdict-loss";   arrow = "↓"; }
+    let verdictClass = "btrk-verdict-even", arrow = "\u25B6";
+    if (diff > 0)      { verdictClass = "btrk-verdict-profit"; arrow = "\u25B2"; }
+    else if (diff < 0) { verdictClass = "btrk-verdict-loss";   arrow = "\u25BC"; }
 
     const allItems = [...myCalc.items, ...theirCalc.items];
     const demandRating = computeDemandRating(allItems);
