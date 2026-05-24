@@ -1,0 +1,47 @@
+<!--
+  Icon Generator Helper
+  Open this file in a browser to generate PNG icons for the extension.
+  Right-click each canvas and "Save image as" with the appropriate filename.
+-->
+<!DOCTYPE html>
+<html>
+<head><title>BtrKorone Icon Generator</title></head>
+<body>
+<h2>BtrKorone Icons - Save each as PNG</h2>
+<div id="icons"></div>
+<script>
+const sizes = [16, 32, 48, 128];
+sizes.forEach(size => {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // Background circle
+  ctx.fillStyle = '#1a1a2e';
+  ctx.beginPath();
+  ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Accent ring
+  ctx.strokeStyle = '#4fc3f7';
+  ctx.lineWidth = size * 0.08;
+  ctx.beginPath();
+  ctx.arc(size/2, size/2, size * 0.38, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Text
+  ctx.fillStyle = '#4fc3f7';
+  ctx.font = `bold ${size * 0.35}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('BK', size/2, size/2);
+
+  const label = document.createElement('p');
+  label.textContent = `icon${size}.png`;
+  document.getElementById('icons').appendChild(label);
+  document.getElementById('icons').appendChild(canvas);
+});
+</script>
+</body>
+</html>

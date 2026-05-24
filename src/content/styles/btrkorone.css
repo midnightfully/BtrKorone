@@ -1,0 +1,1282 @@
+/* BtrKorone v2 - Content Script Styles */
+
+/* === CSS Variables === */
+body.btrkorone-active {
+  --btrk-accent: #4fc3f7;
+  --btrk-gold: #ffd700;
+  --btrk-green: #4caf50;
+  --btrk-red: #f44336;
+  --btrk-bg-dark: #1a1a2e;
+  --btrk-bg-card: #16213e;
+  --btrk-border: #2a2a4a;
+  --btrk-text: #e0e0e0;
+  --btrk-text-muted: #a0a0b0;
+}
+
+/* === Active Indicator === */
+.btrkorone-indicator {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  z-index: 99999;
+  pointer-events: none;
+}
+
+.btrkorone-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--btrk-green);
+  box-shadow: 0 0 6px var(--btrk-green);
+  animation: btrk-pulse 2s infinite;
+}
+
+@keyframes btrk-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.9); }
+}
+
+/* ============================================================
+   PLAY BUTTON
+   ============================================================ */
+
+.btrkorone-play-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 100;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--btrk-green);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+}
+
+.btrkorone-play-btn .play-icon {
+  margin-left: 2px;
+  line-height: 1;
+}
+
+/* Show on card hover */
+.btrk-play-injected:hover .btrkorone-play-btn,
+.btrkorone-play-btn:focus {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.btrkorone-play-btn:hover {
+  background: #43a047;
+  transform: scale(1.1) !important;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.6);
+}
+
+.btrkorone-play-btn:active {
+  transform: scale(0.95) !important;
+}
+
+/* Large play button on game detail pages */
+.btrkorone-play-btn-large {
+  position: relative;
+  bottom: auto;
+  right: auto;
+  width: auto;
+  height: auto;
+  border-radius: 6px;
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  opacity: 1;
+  transform: none;
+  margin-top: 12px;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btrkorone-play-btn-large .play-icon {
+  font-size: 16px;
+  margin-left: 0;
+}
+
+.btrkorone-play-btn-large:hover {
+  transform: translateY(-1px) !important;
+}
+
+/* ============================================================
+   QUICK NAVIGATION BAR
+   ============================================================ */
+
+.btrkorone-quicknav {
+  background: var(--btrk-bg-dark);
+  border-bottom: 1px solid var(--btrk-border);
+  padding: 5px 0;
+  position: sticky;
+  top: 0;
+  z-index: 9998;
+}
+
+.btrkorone-quicknav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 12px;
+  flex-wrap: wrap;
+}
+
+.btrkorone-quicknav-link {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--btrk-text-muted);
+  text-decoration: none;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btrkorone-quicknav-link:hover {
+  color: #fff;
+  background: rgba(79, 195, 247, 0.1);
+}
+
+.btrkorone-quicknav-link.active {
+  color: var(--btrk-accent);
+  background: rgba(79, 195, 247, 0.12);
+  font-weight: 600;
+}
+
+/* ============================================================
+   CARD ENHANCEMENTS
+   ============================================================ */
+
+.btrkorone-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+
+.btrkorone-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================
+   PREMIUM BADGE
+   ============================================================ */
+
+.btrkorone-premium-badge {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(79, 195, 247, 0.12);
+  vertical-align: middle;
+  letter-spacing: 0.3px;
+}
+
+/* Account age tag */
+.btrkorone-account-age {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--btrk-text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+/* ============================================================
+   TRADE OVERLAY (Fixed - Draggable, Minimizable)
+   ============================================================ */
+
+.btrkorone-trade-overlay {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 260px;
+  background: var(--btrk-bg-dark);
+  border: 1px solid var(--btrk-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 99990;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.btrk-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--btrk-bg-card);
+  border-bottom: 1px solid var(--btrk-border);
+  user-select: none;
+}
+
+.btrk-overlay-title {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--btrk-text);
+}
+
+.btrk-overlay-toggle {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--btrk-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.btrk-overlay-toggle:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btrk-overlay-body {
+  padding: 10px 12px;
+}
+
+.btrk-overlay-section h4 {
+  font-size: 11px;
+  color: var(--btrk-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.btrk-overlay-items {
+  min-height: 24px;
+  padding: 4px 0;
+}
+
+.btrk-overlay-empty {
+  color: #555;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.btrk-overlay-count {
+  color: var(--btrk-accent);
+  font-weight: 500;
+}
+
+.btrk-overlay-total {
+  font-size: 11px;
+  color: var(--btrk-text-muted);
+  padding-top: 2px;
+}
+
+.btrk-overlay-divider {
+  height: 1px;
+  background: var(--btrk-border);
+  margin: 8px 0;
+}
+
+.btrk-overlay-verdict {
+  padding: 8px;
+  background: rgba(79, 195, 247, 0.06);
+  border-radius: 4px;
+  text-align: center;
+  color: var(--btrk-text-muted);
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+/* ============================================================
+   TRADE ENHANCEMENTS
+   ============================================================ */
+
+.btrkorone-trade-item {
+  position: relative;
+}
+
+.btrkorone-value-tag {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  font-size: 9px;
+  background: rgba(0, 0, 0, 0.8);
+  color: var(--btrk-accent);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.btrkorone-trade-summary {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--btrk-bg-card);
+  border-radius: 6px;
+  border: 1px solid var(--btrk-border);
+}
+
+.trade-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--btrk-text-muted);
+}
+
+.trade-summary-diff {
+  border-top: 1px solid var(--btrk-border);
+  margin-top: 4px;
+  padding-top: 6px;
+  font-weight: 600;
+  color: var(--btrk-text);
+}
+
+/* ============================================================
+   ADVANCED TRADE CALCULATOR (Rex)
+   ============================================================ */
+
+.btrkorone-calc {
+  margin-top: 14px;
+  background: var(--btrk-bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--btrk-border);
+  overflow: hidden;
+}
+
+.btrk-calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 215, 0, 0.05);
+  border-bottom: 1px solid var(--btrk-border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--btrk-text);
+}
+
+.btrk-calc-badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--btrk-gold);
+}
+
+.btrk-calc-body {
+  padding: 10px 12px;
+}
+
+.btrk-calc-row {
+  margin-bottom: 8px;
+}
+
+.btrk-calc-row label {
+  display: block;
+  font-size: 11px;
+  color: var(--btrk-text-muted);
+  margin-bottom: 3px;
+}
+
+.btrk-calc-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--btrk-bg-dark);
+  border: 1px solid var(--btrk-border);
+  border-radius: 4px;
+  color: var(--btrk-text);
+  font-size: 13px;
+  outline: none;
+}
+
+.btrk-calc-input:focus {
+  border-color: var(--btrk-gold);
+}
+
+.btrk-calc-result {
+  padding: 8px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--btrk-text-muted);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.btrk-calc-profit {
+  color: var(--btrk-green);
+  background: rgba(76, 175, 80, 0.08);
+}
+
+.btrk-calc-loss {
+  color: var(--btrk-red);
+  background: rgba(244, 67, 54, 0.08);
+}
+
+.btrk-calc-even {
+  color: var(--btrk-accent);
+  background: rgba(79, 195, 247, 0.08);
+}
+
+/* ============================================================
+   CATALOG FILTERS
+   ============================================================ */
+
+.btrkorone-catalog-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--btrk-bg-card);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--btrk-border);
+}
+
+.btrk-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--btrk-text-muted);
+}
+
+.btrk-filter-sep { opacity: 0.4; }
+
+.btrk-filter-input {
+  width: 65px;
+  padding: 5px 7px;
+  background: var(--btrk-bg-dark);
+  border: 1px solid var(--btrk-border);
+  border-radius: 4px;
+  color: var(--btrk-text);
+  font-size: 12px;
+  outline: none;
+}
+
+.btrk-filter-input:focus { border-color: var(--btrk-accent); }
+
+.btrk-filter-select {
+  padding: 5px 7px;
+  background: var(--btrk-bg-dark);
+  border: 1px solid var(--btrk-border);
+  border-radius: 4px;
+  color: var(--btrk-text);
+  font-size: 12px;
+}
+
+.btrk-filter-btn {
+  padding: 5px 12px;
+  background: var(--btrk-accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btrk-filter-btn:hover { opacity: 0.85; }
+
+.btrk-filter-reset {
+  background: transparent;
+  color: var(--btrk-text-muted);
+  border: 1px solid var(--btrk-border);
+}
+
+/* ============================================================
+   ITEM VALUE ESTIMATES
+   ============================================================ */
+
+.btrkorone-value-estimate {
+  font-size: 10px;
+  color: var(--btrk-gold);
+  padding: 2px 4px;
+  text-align: center;
+}
+
+.btrk-est-label {
+  color: var(--btrk-text-muted);
+  font-size: 9px;
+}
+
+/* ============================================================
+   SERVER SIZE INDICATOR
+   ============================================================ */
+
+.btrkorone-server-indicator {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--btrk-bg-card);
+  border-radius: 6px;
+  border: 1px solid var(--btrk-border);
+}
+
+.btrk-server-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.btrk-server-label {
+  color: var(--btrk-text-muted);
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.btrk-server-meter {
+  flex: 1;
+  height: 8px;
+  background: var(--btrk-bg-dark);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.btrk-server-fill {
+  height: 100%;
+  background: var(--btrk-green);
+  border-radius: 4px;
+  transition: width 0.4s ease, background 0.3s ease;
+}
+
+.btrk-server-count {
+  color: var(--btrk-text);
+  font-weight: 500;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+/* ============================================================
+   FRIEND ACTIVITY FEED
+   ============================================================ */
+
+.btrkorone-activity-feed {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--btrk-bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--btrk-border);
+}
+
+.btrk-feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btrk-feed-header h3 {
+  font-size: 13px;
+  color: var(--btrk-text);
+}
+
+.btrk-feed-badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--btrk-gold);
+}
+
+.btrk-feed-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.btrk-feed-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.btrk-feed-item:last-child { border-bottom: none; }
+
+.btrk-feed-name {
+  font-size: 12px;
+  color: var(--btrk-text);
+  font-weight: 500;
+}
+
+.btrk-feed-status {
+  font-size: 10px;
+  color: var(--btrk-green);
+}
+
+.btrk-feed-empty {
+  font-size: 12px;
+  color: #555;
+  text-align: center;
+  padding: 12px;
+}
+
+/* ============================================================
+   NOTIFICATIONS POPUP (Rex)
+   ============================================================ */
+
+.btrkorone-notif-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--btrk-bg-dark);
+  border: 1px solid var(--btrk-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+}
+
+.btrk-notif-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--btrk-border);
+}
+
+.btrk-notif-header h4 {
+  font-size: 13px;
+  color: var(--btrk-text);
+}
+
+.btrk-notif-clear {
+  font-size: 10px;
+  color: var(--btrk-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.btrk-notif-clear:hover { text-decoration: underline; }
+
+.btrk-notif-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: #555;
+}
+
+/* ============================================================
+   COMPACT MODE
+   ============================================================ */
+
+body.btrkorone-compact .btrkorone-quicknav {
+  padding: 2px 0;
+}
+
+body.btrkorone-compact .btrkorone-quicknav-link {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+body.btrkorone-compact .btrkorone-card {
+  margin-bottom: 4px;
+}
+
+/* ============================================================
+   DARK MODE OVERRIDE
+   ============================================================ */
+
+body.btrkorone-dark {
+  background: #0d0d1a !important;
+  color: #e0e0e0 !important;
+}
+
+body.btrkorone-dark .navbar,
+body.btrkorone-dark nav,
+body.btrkorone-dark .nav-container {
+  background: #12122a !important;
+}
+
+body.btrkorone-dark footer,
+body.btrkorone-dark .footer {
+  background: #0a0a18 !important;
+}
+
+body.btrkorone-dark .card,
+body.btrkorone-dark .panel,
+body.btrkorone-dark .container-main {
+  background: #151530 !important;
+  color: #e0e0e0 !important;
+}
+
+/* ============================================================
+   PAGINATION ENHANCEMENT
+   ============================================================ */
+
+.btrkorone-pagination a {
+  transition: all 0.15s ease;
+}
+
+.btrkorone-pagination a:hover {
+  transform: scale(1.05);
+}
+
+
+
+/* ============================================================
+   KOROMONS LIVE DATA - Value Tags, Demand, Trend
+   ============================================================ */
+
+/* Demand dot indicator on value tags */
+.btrk-demand-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+/* Value tag with live data */
+.btrkorone-value-tag.btrk-valued-live {
+  background: rgba(0, 0, 0, 0.85);
+  color: var(--btrk-accent);
+  font-weight: 600;
+}
+
+.btrkorone-value-tag.btrk-no-value {
+  background: rgba(0, 0, 0, 0.6);
+  color: #666;
+  font-style: italic;
+}
+
+/* Demand badge on value estimates */
+.btrk-demand-badge {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #000;
+  margin-left: 4px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+/* No value state */
+.btrk-est-value.btrk-no-val {
+  color: #555;
+  font-style: italic;
+}
+
+/* Trade overlay item lines with live values */
+.btrk-overlay-item-line {
+  font-size: 11px;
+  padding: 2px 0;
+  color: var(--btrk-text, #e0e0e0);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btrk-overlay-item-line:last-child {
+  border-bottom: none;
+}
+
+/* Overlay verdict states */
+.btrk-verdict-profit {
+  color: var(--btrk-green, #4caf50) !important;
+  background: rgba(76, 175, 80, 0.1) !important;
+  font-weight: 600;
+}
+
+.btrk-verdict-loss {
+  color: var(--btrk-red, #f44336) !important;
+  background: rgba(244, 67, 54, 0.1) !important;
+  font-weight: 600;
+}
+
+.btrk-verdict-even {
+  color: var(--btrk-gold, #ffd700) !important;
+  background: rgba(255, 215, 0, 0.08) !important;
+  font-weight: 600;
+}
+
+/* Enhanced value estimate row with demand */
+.btrkorone-value-estimate {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 3px 5px;
+}
+
+.btrkorone-value-estimate .btrk-est-value {
+  color: var(--btrk-gold, #ffd700);
+  font-weight: 600;
+}
+
+
+
+/* ============================================================
+   TRADE OVERLAY (API-DRIVEN)
+   ============================================================ */
+
+.btrkorone-trade-overlay {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 320px;
+  background: #1a1a1f;
+  border: 1px solid #2a2a30;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 99998;
+  font-family: -apple-system, sans-serif;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+
+.btrk-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #2a2a30;
+  border-radius: 8px 8px 0 0;
+  user-select: none;
+}
+
+.btrk-overlay-title {
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.btrk-overlay-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #fff;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.btrk-overlay-toggle:hover { background: rgba(255, 255, 255, 0.2); }
+
+.btrk-overlay-body {
+  padding: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.btrk-overlay-section h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #888;
+  margin: 0 0 6px 0;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.btrk-overlay-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.btrk-overlay-empty {
+  color: #555;
+  font-style: italic;
+  font-size: 11px;
+}
+
+.btrk-overlay-item-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.btrk-overlay-item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ddd;
+}
+
+.btrk-overlay-item-value {
+  color: #4fc3f7;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.btrk-overlay-item-rap {
+  color: #888;
+  font-size: 10px;
+  font-style: italic;
+}
+
+.btrk-overlay-total {
+  text-align: right;
+  font-size: 12px;
+  color: #aaa;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid #2a2a30;
+}
+
+.btrk-overlay-total span {
+  color: #4fc3f7;
+  font-weight: 700;
+}
+
+.btrk-overlay-divider {
+  height: 8px;
+}
+
+.btrk-overlay-verdict {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #888;
+}
+
+.btrk-verdict-profit {
+  background: rgba(34, 197, 94, 0.15) !important;
+  color: #4ade80 !important;
+}
+
+.btrk-verdict-loss {
+  background: rgba(244, 67, 54, 0.15) !important;
+  color: #f87171 !important;
+}
+
+.btrk-verdict-even {
+  background: rgba(255, 215, 0, 0.15) !important;
+  color: #ffd700 !important;
+}
+
+.btrk-demand-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   TRADE TABLE ROW VALUE COLUMN
+   ============================================================ */
+
+.btrk-trade-value-cell {
+  padding: 4px 8px !important;
+}
+
+.btrk-trade-value-summary {
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.btrk-trade-value-summary.btrk-verdict-profit { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+.btrk-trade-value-summary.btrk-verdict-loss { background: rgba(244, 67, 54, 0.15); color: #f87171; }
+.btrk-trade-value-summary.btrk-verdict-even { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
+
+.btrk-trade-vs {
+  font-size: 10px;
+  opacity: 0.85;
+  font-weight: 500;
+}
+
+.btrk-trade-diff {
+  font-weight: 700;
+  font-size: 11px;
+}
+
+/* ============================================================
+   FLOATING TRADE CALCULATOR (Rex)
+   ============================================================ */
+
+.btrkorone-calc-floating {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 240px;
+  background: #1a1a1f;
+  border: 1px solid #2a2a30;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 99997;
+  font-family: -apple-system, sans-serif;
+  color: #e0e0e0;
+}
+
+.btrkorone-calc-floating .btrk-calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #2a2a30;
+  border-radius: 8px 8px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.btrkorone-calc-floating .btrk-calc-badge {
+  background: #ffd700;
+  color: #000;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.btrkorone-calc-floating .btrk-calc-body {
+  padding: 12px;
+}
+
+.btrkorone-calc-floating .btrk-calc-row {
+  margin-bottom: 8px;
+}
+
+.btrkorone-calc-floating .btrk-calc-row label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.btrkorone-calc-floating .btrk-calc-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: #0a0a0d;
+  border: 1px solid #2a2a30;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+
+.btrkorone-calc-floating .btrk-calc-input:focus { border-color: #4fc3f7; }
+
+.btrkorone-calc-floating .btrk-calc-result {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.05);
+  color: #aaa;
+}
+
+.btrkorone-calc-floating .btrk-calc-profit { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+.btrkorone-calc-floating .btrk-calc-loss { background: rgba(244, 67, 54, 0.15); color: #f87171; }
+.btrkorone-calc-floating .btrk-calc-even { background: rgba(255, 215, 0, 0.15); color: #ffd700; }
+
+/* ============================================================
+   MODAL ITEM VALUE TAGS
+   ============================================================ */
+
+.btrkorone-value-tag {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+}
+
+.btrkorone-value-tag.btrk-valued-live {
+  background: rgba(79, 195, 247, 0.95);
+  color: #000;
+}
+
+.btrkorone-value-tag.btrk-no-value {
+  background: rgba(0, 0, 0, 0.7);
+  color: #aaa;
+  font-style: italic;
+}
+
+
+/* ============================================================
+   TRADE MODAL ENHANCEMENT (Rex tier)
+   Inserted directly inside Pekora's trade modal
+   ============================================================ */
+
+.btrkorone-value-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+  line-height: 1.2;
+  z-index: 10;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btrkorone-value-badge .btrk-badge-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.btrkorone-value-badge .btrk-badge-value {
+  color: #4fc3f7;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.btrkorone-value-badge .btrk-badge-rap {
+  color: #aaa;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+/* === Summary Panel (the verdict box at bottom of modal) === */
+
+.btrk-trade-summary-panel {
+  margin: 16px 0 8px;
+  padding: 0;
+  background: linear-gradient(135deg, #1a1a2e 0%, #2a2a40 100%);
+  border-radius: 8px;
+  border: 1px solid #3a3a55;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #e0e0e0;
+}
+
+.btrk-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid #2a2a40;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.btrk-summary-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.btrk-summary-grid {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btrk-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.btrk-summary-label {
+  color: #a0a0b0;
+}
+
+.btrk-summary-val {
+  color: #fff;
+  font-weight: 600;
+}
+
+.btrk-summary-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  font-weight: 800;
+  font-size: 16px;
+  border-top: 1px solid #2a2a40;
+}
+
+.btrk-summary-verdict.btrk-verdict-profit {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+}
+
+.btrk-summary-verdict.btrk-verdict-loss {
+  background: rgba(244, 67, 54, 0.12);
+  color: #f87171;
+}
+
+.btrk-summary-verdict.btrk-verdict-even {
+  background: rgba(255, 215, 0, 0.10);
+  color: #ffd700;
+}
+
+.btrk-verdict-arrow {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.btrk-verdict-amount {
+  font-size: 18px;
+}
+
+.btrk-verdict-pct {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.btrk-demand-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
