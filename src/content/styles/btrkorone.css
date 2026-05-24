@@ -33,7 +33,7 @@ body.btrkorone-active {
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: #4caf50;
+  background: #a855f7;
   border: 1.5px solid rgba(255, 255, 255, 0.9);
   color: #fff;
   font-size: 12px;
@@ -41,12 +41,13 @@ body.btrkorone-active {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0.92;
-  transform: scale(1);
+  /* Hidden by default; revealed when the parent card is hovered */
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.85);
   transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   padding: 0;
-  pointer-events: auto;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -55,15 +56,19 @@ body.btrkorone-active {
   line-height: 1;
 }
 
-.btrk-play-injected:hover .btrkorone-play-btn {
+.btrk-play-injected:hover .btrkorone-play-btn,
+.btrkorone-play-btn:focus-visible {
   opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
 }
 
 .btrkorone-play-btn:hover {
-  background: #43a047;
+  background: #9333ea;
   transform: scale(1.08);
-  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.6);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.65);
   opacity: 1 !important;
+  pointer-events: auto;
 }
 
 .btrkorone-play-btn:active {
@@ -72,13 +77,14 @@ body.btrkorone-active {
 
 .btrkorone-play-btn.btrk-play-btn-loading {
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 1;
+  transform: scale(1);
   animation: btrk-play-pulse 0.9s ease-in-out infinite;
 }
 
 @keyframes btrk-play-pulse {
   0%, 100% { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
-  50%      { box-shadow: 0 2px 14px rgba(76, 175, 80, 0.85); }
+  50%      { box-shadow: 0 2px 14px rgba(168, 85, 247, 0.85); }
 }
 
 /* Large play button on game detail pages */
