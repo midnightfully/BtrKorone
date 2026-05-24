@@ -51,6 +51,28 @@
   }
 
   /**
+   * Listen for trade-id hints relayed from the page-spy script (MAIN world).
+   * The spy intercepts Pekora's own /apisite/trades/v1/trades/{id} fetch and
+   * postMessages the {id} here so we can use it as a definitive hint when
+   * the modal opens, without scraping the DOM.
+   */
+  function installFetchSpyListener() {
+    window.addEventListener("message", (event) => {
+      // Only accept messages from this exact window (the page itself)
+      if (event.source !== window) return;
+      const data = event.data;
+      if (!data || data.__btrkorone !== true) return;
+      if (data.type !== "TRADE_FETCH") return;
+
+      const raw = String(data.tradeId || "");
+      if (!/^\d{3,12}$/.test(raw)) return;
+
+      lastTradeHint = { id: raw, ts: Date.now() };
+      console.log(`[BtrKorone/Trades] Fetch spy captured trade ID: ${raw}`);
+    });
+  }
+
+  /**
    * Install a capture-phase click listener that scans the clicked element
    * (and a few ancestors) for anything that looks like a trade ID.
    */
@@ -113,6 +135,7 @@
     }
 
     console.log("[BtrKorone/Trades] Init for user:", cachedMyUserId);
+    installFetchSpyListener();
     installClickHintCapture();
     await refreshTradeCache();
     observeForTradeModal();
