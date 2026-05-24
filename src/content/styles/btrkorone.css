@@ -1139,44 +1139,178 @@ body.btrkorone-dark .container-main {
 
 
 /* ============================================================
-   TRADE MODAL ENHANCEMENT (Rex tier)
+   TRADE MODAL ENHANCEMENT (Rex tier) - RoPro-style
    Inserted directly inside Pekora's trade modal
    ============================================================ */
 
+/* === Per-card Robux value pill (top-right corner) === */
+
 .btrkorone-value-badge {
   position: absolute;
-  bottom: 4px;
+  top: 4px;
   right: 4px;
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  background: rgba(15, 15, 22, 0.92);
+  color: #ffffff;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 11px;
   font-weight: 700;
-  text-align: right;
-  line-height: 1.2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1;
   z-index: 10;
-  pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: auto;
+  cursor: default;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
-.btrkorone-value-badge .btrk-badge-line {
+.btrkorone-value-badge.btrk-rap-only {
+  background: rgba(15, 15, 22, 0.78);
+  color: #c0c0d0;
+  font-style: italic;
+}
+
+.btrkorone-value-badge .btrk-badge-robux {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2fbf71 0%, #1d9c5a 100%);
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+.btrkorone-value-badge .btrk-badge-num {
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+}
+
+.btrkorone-value-badge.btrk-rap-only .btrk-badge-num {
+  color: #c0c0d0;
+}
+
+.btrkorone-value-badge .btrk-demand-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+/* === Per-section summary rows (under each "Value: R$ XXX") === */
+
+.btrk-section-summary {
+  margin-top: 6px;
+  padding: 6px 0 4px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: inherit;
+}
+
+.btrk-section-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 3px;
+  justify-content: space-between;
+  padding: 2px 0;
+  gap: 10px;
 }
 
-.btrkorone-value-badge .btrk-badge-value {
-  color: #4fc3f7;
+.btrk-section-row-muted {
   font-size: 11px;
-  font-weight: 800;
+  opacity: 0.65;
 }
 
-.btrkorone-value-badge .btrk-badge-rap {
-  color: #aaa;
-  font-size: 9px;
+.btrk-section-label {
+  color: inherit;
+  opacity: 0.85;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.btrk-section-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.btrk-icon-rolimons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4fc3f7 0%, #1976d2 100%);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+/* === Net-change indicator (between give & receive sections) === */
+
+.btrk-net-change {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 14px auto;
+  padding: 6px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  position: relative;
+  width: 100%;
+}
+
+.btrk-net-change .btrk-net-arrow {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.btrk-net-change .btrk-net-value {
+  font-size: 16px;
+}
+
+.btrk-net-change .btrk-net-pct {
+  font-size: 13px;
+  opacity: 0.85;
+  font-weight: 700;
+}
+
+.btrk-net-profit {
+  color: #22c55e;
+}
+.btrk-net-profit .btrk-net-arrow {
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.45);
+}
+
+.btrk-net-loss {
+  color: #ef4444;
+}
+.btrk-net-loss .btrk-net-arrow {
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
+}
+
+.btrk-net-even {
+  color: #fbbf24;
 }
 
 /* === Summary Panel (the verdict box at bottom of modal) === */
