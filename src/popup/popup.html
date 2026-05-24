@@ -43,7 +43,7 @@
         </div>
         <div class="action-grid">
           <button class="action-btn action-blue" id="btn-manage">Manage<br>Account</button>
-          <button class="action-btn action-green" id="btn-activate">Link<br>Account</button>
+          <button class="action-btn action-green" id="btn-activate">Verify<br>Subscription</button>
           <button class="action-btn action-blue" id="btn-support">Support</button>
           <button class="action-btn action-blue" id="btn-discord">
             <span class="action-icon">&#x1F4AC;</span> Discord
@@ -102,8 +102,8 @@
     <!-- Verification Modal (hidden by default) -->
     <div class="modal-overlay" id="verify-modal" style="display:none;">
       <div class="modal-content">
-        <h2 class="modal-title">Link Your Korone Account</h2>
-        <p class="modal-help">Enter your Korone User ID, generate a token, paste it into your <strong>Korone About Me</strong>, then verify the link. This only links your account &mdash; it doesn't activate any premium tier.</p>
+        <h2 class="modal-title">Verify Your Subscription</h2>
+        <p class="modal-help">Enter your Korone User ID, generate a token, paste it into your <strong>Korone About Me</strong>, then click <strong>Verify Subscription</strong>. We'll check your About Me for the token <em>and</em> confirm you own a BtrKorone+ or BtrKorone Rex gamepass &mdash; if both pass, your subscription is activated automatically.</p>
 
         <label class="modal-label">Korone User ID</label>
         <input type="text" id="input-userid" placeholder="e.g. 42770" class="modal-input">
@@ -118,7 +118,7 @@
           </div>
         </div>
 
-        <button class="modal-btn modal-btn-success" id="btn-verify" style="display:none;">Verify &amp; Link Account</button>
+        <button class="modal-btn modal-btn-success" id="btn-verify" style="display:none;">Verify Subscription</button>
         <button class="modal-btn modal-btn-danger" id="btn-logout" style="display:none;">Unlink Account</button>
         <button class="modal-btn modal-btn-secondary" id="btn-close-modal">Close</button>
 
