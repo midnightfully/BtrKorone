@@ -84,6 +84,14 @@ const BTRKORONE = {
       tier: 2,
       category: "trading",
       defaultEnabled: true
+    },
+    {
+      id: "tradeNotifications",
+      name: "Trade Notifications",
+      description: "Shows a desktop notification when you receive a new trade request",
+      tier: 2,
+      category: "trading",
+      defaultEnabled: true
     }
   ],
 
