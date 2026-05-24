@@ -5,7 +5,7 @@
 
 const BTRKORONE = {
   NAME: "BtrKorone",
-  VERSION: "2.5.6",
+  VERSION: "2.6.0",
 
   KORONE_BASE_URL: "https://www.pekora.zip",
   KORONE_GAMES_URL: "https://www.pekora.zip/games",
@@ -74,6 +74,15 @@ const BTRKORONE = {
       description: "Adds a play button to game cards that launches games instantly",
       tier: 0,
       category: "games",
+      defaultEnabled: true
+    },
+    // PLUS TIER
+    {
+      id: "koromonsBadges",
+      name: "Koromons Value Badges",
+      description: "Shows a Koromons gem indicator on item cards in trades and the catalog when the item has a tracked Koromons value",
+      tier: 1,
+      category: "trading",
       defaultEnabled: true
     },
     // REX TIER

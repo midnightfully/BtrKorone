@@ -173,7 +173,15 @@
   const waitForInit = setInterval(() => {
     if (!window.__btrkorone) return;
     clearInterval(waitForInit);
-    if (!window.__btrkorone.hasFeature("tradeModal")) return;
+    // This script handles two related features that share the same
+    // modal-detection plumbing:
+    //   - tradeModal (Rex)        -> per-item value pill + section summary + verdict banner
+    //   - koromonsBadges (Plus)   -> just the small Koromons gem indicator on tracked items
+    // If neither is active there's nothing to do.
+    if (
+      !window.__btrkorone.hasFeature("tradeModal") &&
+      !window.__btrkorone.hasFeature("koromonsBadges")
+    ) return;
     if (!isTradePage()) return;
     init();
   }, 100);
@@ -328,7 +336,7 @@
    */
   function clearInjections(modal) {
     modal.querySelectorAll(
-      ".btrkorone-value-badge, .btrk-net-change, .btrk-section-summary, .btrk-trade-summary-panel"
+      ".btrkorone-value-badge, .btrkorone-koromons-badge, .btrk-net-change, .btrk-section-summary, .btrk-trade-summary-panel"
     ).forEach(el => el.remove());
   }
 
@@ -642,9 +650,42 @@
   }
 
   function addBadgeToCard(card, item) {
-    if (card.querySelector(".btrkorone-value-badge")) return;
     if (getComputedStyle(card).position === "static") {
       card.style.position = "relative";
+    }
+
+    // ---- Plus-tier Koromons gem badge -------------------------------
+    // Tagged on every card whose item resolves to a Koromons entry with
+    // a Value. Independent of the Rex `tradeModal` feature so a Plus
+    // subscriber sees gems even when value pills aren't injected.
+    if (
+      item && item.hasKoromonValue &&
+      window.__btrkorone &&
+      window.__btrkorone.hasFeature("koromonsBadges") &&
+      !card.querySelector(".btrkorone-koromons-badge")
+    ) {
+      const gem = document.createElement("div");
+      gem.className = "btrkorone-koromons-badge";
+      gem.innerHTML =
+        '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+        '<path d="M6 3 L18 3 L22 9 L12 22 L2 9 Z" fill="#0ea5e9" stroke="#082f49" stroke-width="0.6"/>' +
+        '<path d="M6 3 L12 9 L18 3 Z" fill="#7dd3fc"/>' +
+        '<path d="M2 9 L22 9 M12 9 L12 22" stroke="#082f49" stroke-width="0.4" fill="none" opacity="0.55"/>' +
+        '<circle cx="9" cy="6" r="0.9" fill="#ffffff" opacity="0.9"/>' +
+        '</svg>';
+      gem.title = `${item.name}\nKoromons Value: ${item.koromonValue.toLocaleString()}`;
+      card.appendChild(gem);
+    }
+
+    // ---- Rex-tier value pill ----------------------------------------
+    // Skip when only `koromonsBadges` is active (Plus tier) - the pill
+    // is part of the `tradeModal` feature.
+    if (
+      !window.__btrkorone ||
+      !window.__btrkorone.hasFeature("tradeModal") ||
+      card.querySelector(".btrkorone-value-badge")
+    ) {
+      return;
     }
 
     const value = item.hasKoromonValue ? item.koromonValue : item.rap;
@@ -770,6 +811,8 @@
   }
 
   function injectNetChange(modal, sections, myCalc, theirCalc) {
+    // Verdict banner is part of the Rex `tradeModal` feature only.
+    if (!window.__btrkorone || !window.__btrkorone.hasFeature("tradeModal")) return;
     const myValue    = effectiveTotal(myCalc);
     const theirValue = effectiveTotal(theirCalc);
 
@@ -812,6 +855,8 @@
   // ============================================================
 
   function injectFallbackPanel(modal, myCalc, theirCalc) {
+    // Bottom summary panel is part of the Rex `tradeModal` feature only.
+    if (!window.__btrkorone || !window.__btrkorone.hasFeature("tradeModal")) return;
     if (modal.querySelector(".btrk-trade-summary-panel")) return;
 
     // Net diff uses best-available value per item (Korone value when known,
