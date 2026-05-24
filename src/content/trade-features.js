@@ -713,24 +713,19 @@
   function injectFallbackPanel(modal, myCalc, theirCalc) {
     if (modal.querySelector(".btrk-trade-summary-panel")) return;
 
+    // Net diff uses best-available value per item (Korone value when known,
+    // else RAP). Mirrors RoPro's headline "you came out N up/down" number.
     const myValue    = effectiveTotal(myCalc);
     const theirValue = effectiveTotal(theirCalc);
     const diff = theirValue - myValue;
-    const pct = myValue > 0 ? ((diff / myValue) * 100).toFixed(1) : 0;
+    const pct = myValue > 0 ? ((diff / myValue) * 100).toFixed(1) : "0.0";
 
     let verdictClass = "btrk-verdict-even", arrow = "\u25B6";
     if (diff > 0)      { verdictClass = "btrk-verdict-profit"; arrow = "\u25B2"; }
     else if (diff < 0) { verdictClass = "btrk-verdict-loss";   arrow = "\u25BC"; }
 
-    const allItems = [...myCalc.items, ...theirCalc.items];
-    const demandRating = computeDemandRating(allItems);
-
-    // Sums of Koromons-known values per side (separate from RAP fallback total)
-    const myKoroneVal = myCalc.items.reduce(
-      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0), 0);
-    const theirKoroneVal = theirCalc.items.reduce(
-      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0), 0);
-    const anyValued = (myKoroneVal + theirKoroneVal) > 0;
+    const myStats    = sideStats(myCalc.items);
+    const theirStats = sideStats(theirCalc.items);
 
     const panel = document.createElement("div");
     panel.className = "btrk-trade-summary-panel";
@@ -739,37 +734,74 @@
         <img src="${chrome.runtime.getURL('icons/icon32.png')}" class="btrk-summary-logo">
         <span>BtrKorone Trade Analysis</span>
       </div>
-      <div class="btrk-summary-grid">
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Your Total Value</span>
-          <span class="btrk-summary-val">${formatValue(myValue)}</span>
-        </div>
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Their Total Value</span>
-          <span class="btrk-summary-val">${formatValue(theirValue)}</span>
-        </div>
-        ${anyValued ? `
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Korone Rolimons Value (yours)</span>
-          <span class="btrk-summary-val">${formatValue(myKoroneVal)}</span>
-        </div>
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Korone Rolimons Value (theirs)</span>
-          <span class="btrk-summary-val">${formatValue(theirKoroneVal)}</span>
-        </div>` : ""}
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Korone Demand Rating</span>
-          <span class="btrk-summary-val">${demandRating > 0 ? demandRating.toFixed(1) + "/5.0" : "Unknown"}</span>
-        </div>
-      </div>
       <div class="btrk-summary-verdict ${verdictClass}">
         <span class="btrk-verdict-arrow">${arrow}</span>
         <span class="btrk-verdict-amount">${diff >= 0 ? "+" : ""}${formatValue(diff)}</span>
-        <span class="btrk-verdict-pct">(${pct}%)</span>
+        <span class="btrk-verdict-pct">(${diff >= 0 ? "+" : ""}${pct}%)</span>
+      </div>
+      <div class="btrk-summary-sides">
+        ${renderSideColumn("You Give",    myStats)}
+        <div class="btrk-summary-divider" aria-hidden="true"></div>
+        ${renderSideColumn("You Receive", theirStats)}
       </div>
     `;
 
     insertPanelIntoModal(modal, panel);
+  }
+
+  /**
+   * Compute the per-side breakdown rendered inside the trade analysis panel.
+   * RAP is summed across every item (Pekora always returns a market price).
+   * Value is summed only across items that have a known Koromons value -
+   * if none do, the row collapses to "—" so we don't lie about a 0 total.
+   */
+  function sideStats(items) {
+    const totalRap = items.reduce((s, i) => s + (i.rap || 0), 0);
+    const totalValue = items.reduce(
+      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0), 0);
+    const valuedCount = items.filter(i => i.hasKoromonValue).length;
+    const demandRating = computeDemandRating(items);
+    return { totalRap, totalValue, valuedCount, demandRating };
+  }
+
+  function renderSideColumn(title, stats) {
+    const valueRow = stats.valuedCount > 0
+      ? `<div class="btrk-side-row">
+           <span class="btrk-side-icon btrk-icon-koromons" aria-hidden="true">K</span>
+           <span class="btrk-side-num">${formatValue(stats.totalValue)}</span>
+           <span class="btrk-side-tag">Value</span>
+         </div>`
+      : `<div class="btrk-side-row btrk-side-row-muted">
+           <span class="btrk-side-icon btrk-icon-koromons" aria-hidden="true">K</span>
+           <span class="btrk-side-num">&mdash;</span>
+           <span class="btrk-side-tag">Value</span>
+         </div>`;
+
+    const demandRow = stats.demandRating > 0
+      ? `<div class="btrk-side-row btrk-side-row-meta">
+           <span class="btrk-side-tag">Demand</span>
+           <span class="btrk-side-num">${stats.demandRating.toFixed(1)}/5.0</span>
+         </div>`
+      : "";
+
+    return `
+      <div class="btrk-summary-side">
+        <div class="btrk-side-title">${escapeHtml(title)}</div>
+        <div class="btrk-side-row">
+          <span class="btrk-side-icon btrk-icon-robux" aria-hidden="true">R$</span>
+          <span class="btrk-side-num">${formatValue(stats.totalRap)}</span>
+          <span class="btrk-side-tag">RAP</span>
+        </div>
+        ${valueRow}
+        ${demandRow}
+      </div>
+    `;
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   /**
