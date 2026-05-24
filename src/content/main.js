@@ -1,18 +1,24 @@
 /**
  * BtrKorone - Content Script Main Entry
- * Initializes feature system, injects play button immediately,
- * listens for dynamic feature toggle changes from background
+ *
+ * Currently active features:
+ *   - Play Button (Free tier) - overlays a play button on each Pekora game card
+ *
+ * Listens for tier changes and feature toggle events from the popup.
  */
 
 (async function BtrKoroneInit() {
   "use strict";
 
-  console.log("[BtrKorone] Initializing on:", window.location.href);
-
+  // ---- declarations hoisted to the top to avoid TDZ when called from
+  // injectPlayButtons / observeForGameCards ----
+  let gameCardObserver = null;
   let settings = null;
   let currentTier = 0;
   let featureToggles = {};
   let featureState = {};
+
+  console.log("[BtrKorone] Initializing on:", window.location.href);
 
   try {
     const status = await chrome.runtime.sendMessage({ type: "GET_STATUS" });
@@ -23,9 +29,7 @@
     }
 
     const state = await chrome.runtime.sendMessage({ type: "GET_FEATURE_STATE" });
-    if (state) {
-      featureState = state;
-    }
+    if (state) featureState = state;
   } catch (e) {
     console.warn("[BtrKorone] Could not load state:", e);
     settings = BTRKORONE.DEFAULT_SETTINGS;
@@ -37,7 +41,7 @@
     return;
   }
 
-  // Build active features list
+  // Build active feature list
   const activeFeatures = [];
   BTRKORONE.FEATURE_REGISTRY.forEach(f => {
     const accessible = currentTier >= f.tier;
@@ -45,34 +49,29 @@
     if (accessible && enabled) activeFeatures.push(f.id);
   });
 
-  // Expose global state for other content scripts
+  // Expose global state for sibling content scripts
   window.__btrkorone = {
     settings,
     tier: currentTier,
     toggles: featureToggles,
     activeFeatures,
-    hasFeature(id) {
-      return activeFeatures.includes(id);
-    },
+    hasFeature(id) { return activeFeatures.includes(id); },
     featureState
   };
 
-  // Add body classes for CSS targeting
   document.body.classList.add("btrkorone-active");
   document.body.dataset.btrkoroneTier = currentTier;
 
-  if (activeFeatures.includes("darkModeOverride")) {
-    document.body.classList.add("btrkorone-dark");
-  }
-
-  // === PLAY BUTTON: Inject immediately without waiting for other modules ===
+  // === PLAY BUTTON ===
   if (activeFeatures.includes("playButton")) {
+    console.log("[BtrKorone/PlayButton] Enabled. Scanning for game cards...");
     injectPlayButtons();
-    // Also observe for dynamically loaded game cards
     observeForGameCards();
+  } else {
+    console.log("[BtrKorone/PlayButton] Disabled.");
   }
 
-  // Listen for messages from background (tier changes, feature toggles)
+  // === Background message listener ===
   chrome.runtime.onMessage.addListener((message) => {
     switch (message.type) {
       case "TIER_CHANGED":
@@ -105,18 +104,12 @@
     const toggles = window.__btrkorone.toggles;
     const newActive = [];
     BTRKORONE.FEATURE_REGISTRY.forEach(f => {
-      if (tier >= f.tier && toggles[f.id] !== false) {
-        newActive.push(f.id);
-      }
+      if (tier >= f.tier && toggles[f.id] !== false) newActive.push(f.id);
     });
     window.__btrkorone.activeFeatures = newActive;
-
-    // Update body classes
-    document.body.classList.toggle("btrkorone-dark", newActive.includes("darkModeOverride"));
   }
 
   function handleDynamicToggle(featureId, enabled) {
-    // Handle play button toggle without page refresh
     if (featureId === "playButton") {
       if (enabled) {
         injectPlayButtons();
@@ -127,65 +120,90 @@
     }
   }
 
-  // === Play Button Injection ===
+  // ============================================================
+  // PLAY BUTTON INJECTION
+  // ============================================================
 
+  /**
+   * Pekora uses CSS Modules with hashed class names like `gameCardLink-0-2-148`.
+   * We target by class-prefix and href shape, both of which are stable across
+   * builds even when the numeric hashes change.
+   */
   function injectPlayButtons() {
-    // Target game cards - broad selectors for Pekora's Roblox-style layout
-    const gameCards = document.querySelectorAll(
-      ".game-card:not(.btrk-play-injected), " +
-      ".game-item:not(.btrk-play-injected), " +
-      "[data-game-id]:not(.btrk-play-injected), " +
-      ".game-card-container:not(.btrk-play-injected), " +
-      ".game-card-link:not(.btrk-play-injected), " +
-      ".game-card-thumb-container:not(.btrk-play-injected), " +
-      ".slide-item-container:not(.btrk-play-injected), " +
-      "a[href*='/games/']:not(.btrk-play-injected):not(.btrkorone-quicknav-link)"
-    );
+    const cards = findGameCards();
 
-    gameCards.forEach(card => {
-      card.classList.add("btrk-play-injected");
+    let injected = 0;
+    cards.forEach(card => {
+      if (card.classList.contains("btrk-play-injected")) return;
+
       const placeId = extractPlaceId(card);
       if (!placeId) return;
 
+      card.classList.add("btrk-play-injected");
+      // Make sure the button anchors correctly inside the card
+      if (getComputedStyle(card).position === "static") {
+        card.style.position = "relative";
+      }
+
       const btn = createPlayButton(placeId);
-      card.style.position = "relative";
       card.appendChild(btn);
+      injected++;
     });
 
-    // Also inject on game detail pages
+    if (injected > 0) {
+      console.log(`[BtrKorone/PlayButton] Injected ${injected} play button(s) (total cards seen: ${cards.length}).`);
+    }
+
+    // Also add a large play button on game detail pages
     injectDetailPagePlayButton();
   }
 
-  function injectDetailPagePlayButton() {
-    // Check if we're on a game detail page
-    const pathMatch = window.location.pathname.match(/\/games?\/(\d+)/i);
-    if (!pathMatch) return;
+  /**
+   * Find every Pekora game-card link on the page.
+   * Combined approach so we work on home, /games, /games/groups, etc.
+   */
+  function findGameCards() {
+    const set = new Set();
+    document
+      .querySelectorAll('a[class*="gameCardLink"], a[href^="/games/"]')
+      .forEach(el => {
+        if (el.classList.contains("btrkorone-quicknav-link")) return;
+        // Filter to actual place links: /games/<id>/...
+        const href = el.getAttribute("href") || "";
+        if (/^\/games\/\d+/.test(href)) set.add(el);
+      });
+    return [...set];
+  }
 
-    const placeId = pathMatch[1];
-    const detailContainer = document.querySelector(
-      ".game-info, .game-details, #game-detail-container, .game-header, .place-info"
-    );
-    if (!detailContainer) return;
-    if (detailContainer.querySelector(".btrkorone-play-btn")) return;
+  function extractPlaceId(card) {
+    if (card.dataset && card.dataset.gameId) return card.dataset.gameId;
+    if (card.dataset && card.dataset.placeId) return card.dataset.placeId;
 
-    const btn = document.createElement("button");
-    btn.className = "btrkorone-play-btn btrkorone-play-btn-large";
-    btn.innerHTML = '<span class="play-icon">&#9654;</span> Play';
-    btn.title = "Launch this game";
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      launchGame(placeId);
-    });
-
-    detailContainer.appendChild(btn);
+    const href = card.getAttribute && card.getAttribute("href");
+    if (href) {
+      const m = href.match(/\/games?\/(\d+)/i);
+      if (m) return m[1];
+    }
+    if (card.tagName === "A" && card.href) {
+      const m = card.href.match(/\/games?\/(\d+)/i);
+      if (m) return m[1];
+    }
+    const inner = card.querySelector && card.querySelector('a[href^="/games/"]');
+    if (inner) {
+      const m = (inner.getAttribute("href") || "").match(/\/games?\/(\d+)/i);
+      if (m) return m[1];
+    }
+    return null;
   }
 
   function createPlayButton(placeId) {
     const btn = document.createElement("button");
     btn.className = "btrkorone-play-btn";
-    btn.innerHTML = '<span class="play-icon">&#9654;</span>';
+    btn.type = "button";
+    btn.setAttribute("aria-label", "Launch this game");
     btn.title = "Play this game";
+    btn.innerHTML = '<span class="play-icon">&#9654;</span>';
+    btn.dataset.placeId = placeId;
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -194,39 +212,33 @@
     return btn;
   }
 
-  function launchGame(placeId) {
-    // Navigate to the Pekora game play URL
-    const playUrl = `https://www.pekora.zip/games/${placeId}/play`;
-    window.location.href = playUrl;
+  function injectDetailPagePlayButton() {
+    const pathMatch = window.location.pathname.match(/\/games?\/(\d+)/i);
+    if (!pathMatch) return;
+    const placeId = pathMatch[1];
+
+    const detailContainer = document.querySelector(
+      ".game-info, .game-details, #game-detail-container, .game-header, .place-info, [class*='gamePageContainer']"
+    );
+    if (!detailContainer) return;
+    if (detailContainer.querySelector(".btrkorone-play-btn-large")) return;
+
+    const btn = document.createElement("button");
+    btn.className = "btrkorone-play-btn btrkorone-play-btn-large";
+    btn.type = "button";
+    btn.innerHTML = '<span class="play-icon">&#9654;</span> Play';
+    btn.title = "Launch this game";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      launchGame(placeId);
+    });
+    detailContainer.appendChild(btn);
   }
 
-  function extractPlaceId(card) {
-    // Try data attributes
-    if (card.dataset.gameId) return card.dataset.gameId;
-    if (card.dataset.placeId) return card.dataset.placeId;
-    if (card.dataset.id) return card.dataset.id;
-
-    // Try href from links inside the card
-    const link = card.querySelector("a[href*='/games/'], a[href*='/game/']");
-    if (link) {
-      const match = link.href.match(/\/games?\/(\d+)/i);
-      if (match) return match[1];
-    }
-
-    // Try the card itself if it's a link
-    if (card.tagName === "A" && card.href) {
-      const match = card.href.match(/\/games?\/(\d+)/i);
-      if (match) return match[1];
-    }
-
-    // Try parent links
-    const parentLink = card.closest("a[href*='/games/']");
-    if (parentLink) {
-      const match = parentLink.href.match(/\/games?\/(\d+)/i);
-      if (match) return match[1];
-    }
-
-    return null;
+  function launchGame(placeId) {
+    const playUrl = `https://www.pekora.zip/games/${placeId}/play`;
+    window.location.href = playUrl;
   }
 
   function removePlayButtons() {
@@ -238,26 +250,25 @@
 
   // === MutationObserver for dynamically loaded game cards ===
 
-  let gameCardObserver = null;
-
   function observeForGameCards() {
-    if (gameCardObserver) return; // Already observing
+    if (gameCardObserver) return; // already observing
 
-    gameCardObserver = new MutationObserver((mutations) => {
-      let shouldInject = false;
-      for (const mutation of mutations) {
-        if (mutation.addedNodes.length > 0) {
-          shouldInject = true;
-          break;
+    let scheduled = false;
+    gameCardObserver = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      // Debounce to avoid hammering on fast re-renders
+      requestAnimationFrame(() => {
+        scheduled = false;
+        if (window.__btrkorone && window.__btrkorone.hasFeature("playButton")) {
+          injectPlayButtons();
         }
-      }
-      if (shouldInject && window.__btrkorone.hasFeature("playButton")) {
-        injectPlayButtons();
-      }
+      });
     });
 
     gameCardObserver.observe(document.body, { childList: true, subtree: true });
+    console.log("[BtrKorone/PlayButton] MutationObserver started.");
   }
 
-  console.log("[BtrKorone] Loaded. Tier:", currentTier, "Active features:", activeFeatures.length);
+  console.log("[BtrKorone] Loaded. Tier:", currentTier, "Active features:", activeFeatures.length, activeFeatures);
 })();

@@ -27,24 +27,26 @@ body.btrkorone-active {
 
 .btrkorone-play-btn {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
+  bottom: 6px;
+  right: 6px;
   z-index: 100;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: var(--btrk-green);
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: #4caf50;
+  border: 2px solid rgba(255, 255, 255, 0.85);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
-  transform: scale(0.8);
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+  opacity: 0.85;
+  transform: scale(1);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  padding: 0;
+  pointer-events: auto;
 }
 
 .btrkorone-play-btn .play-icon {
@@ -52,21 +54,19 @@ body.btrkorone-active {
   line-height: 1;
 }
 
-/* Show on card hover */
-.btrk-play-injected:hover .btrkorone-play-btn,
-.btrkorone-play-btn:focus {
+.btrk-play-injected:hover .btrkorone-play-btn {
   opacity: 1;
-  transform: scale(1);
 }
 
 .btrkorone-play-btn:hover {
   background: #43a047;
-  transform: scale(1.1) !important;
+  transform: scale(1.1);
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.6);
+  opacity: 1 !important;
 }
 
 .btrkorone-play-btn:active {
-  transform: scale(0.95) !important;
+  transform: scale(0.95);
 }
 
 /* Large play button on game detail pages */
