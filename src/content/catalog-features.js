@@ -1,5 +1,5 @@
 /**
- * BtrKorone - Koromons Value Badges (Plus tier)
+ * BtrKorone - Rare Item Badges (Plus tier; feature id: koromonsBadges)
  *
  * Drops a small blue gem badge on top of any Pekora item card whose
  * asset ID or name resolves to a Koromons-tracked entry with a Value.

@@ -15,6 +15,7 @@
 
 const KoromonsAPI = {
   BASE_URL: "https://www.koromons.com/api/items",
+  API_ROOT: "https://www.koromons.com/api",
   CACHE_KEY: "btrkorone_koromons_cache",
   CACHE_TS_KEY: "btrkorone_koromons_cache_ts",
   CACHE_DURATION_MS: 30 * 60 * 1000, // 30 minutes (matches Discord bot)
@@ -25,6 +26,17 @@ const KoromonsAPI = {
   _acronymMap: {},    // acronym (lowercase) → item
   _idMap: {},         // itemId → item
   _loaded: false,
+
+  // Badge endpoints have their own short-lived in-memory caches.
+  // Definitions are basically static (a few dozen entries), so we cache
+  // them aggressively (1h). Per-user badge data we cache for 5 minutes
+  // so the section doesn't re-fetch on every minor DOM mutation but
+  // still picks up newly-earned badges quickly.
+  _badgeDefsCache: null,
+  _badgeDefsCacheTs: 0,
+  BADGE_DEFS_CACHE_DURATION_MS: 60 * 60 * 1000, // 1 hour
+  _userBadgesCache: {},      // userId -> { data, ts }
+  USER_BADGES_CACHE_DURATION_MS: 5 * 60 * 1000, // 5 minutes
 
   // ============================================================
   // INITIALIZATION & CACHING
@@ -389,6 +401,111 @@ const KoromonsAPI = {
       }).filter(e => e && e.name && e.name.toLowerCase() !== "none");
     } catch (error) {
       console.error("[BtrKorone/Koromons] Owners fetch failed:", error);
+      return [];
+    }
+  },
+
+  // ============================================================
+  // USER BADGES (Plus tier feature: Koromons Badge Display)
+  //
+  // Three endpoints under https://www.koromons.com/api :
+  //   GET /api/user-badges                     -> badge definition catalog
+  //                                               (id, name, icon, ...)
+  //   GET /api/users/:userId                   -> per-user badge state
+  //                                               { badges: { id: bool, ... },
+  //                                                 hoardingBadges: [],
+  //                                                 customBadges: [] }
+  //   GET /api/users/:userId/user-badges       -> resolved custom badge list
+  //                                               (label, color, icon)
+  //
+  // No auth required for read endpoints.
+  // ============================================================
+
+  /**
+   * Fetch the master catalog of Koromons badge definitions.
+   * Cached in memory for BADGE_DEFS_CACHE_DURATION_MS - definitions
+   * change rarely, so we don't need to refetch per profile view.
+   * Returns [] on failure (so callers can render gracefully).
+   */
+  async getBadgeDefinitions() {
+    const now = Date.now();
+    if (this._badgeDefsCache && (now - this._badgeDefsCacheTs) < this.BADGE_DEFS_CACHE_DURATION_MS) {
+      return this._badgeDefsCache;
+    }
+
+    try {
+      const r = await fetch(`${this.API_ROOT}/user-badges`, {
+        headers: { "Accept": "application/json" }
+      });
+      if (!r.ok) {
+        console.warn(`[BtrKorone/Koromons] getBadgeDefinitions HTTP ${r.status}`);
+        return this._badgeDefsCache || [];
+      }
+      const defs = await r.json();
+      if (Array.isArray(defs)) {
+        this._badgeDefsCache = defs;
+        this._badgeDefsCacheTs = now;
+        return defs;
+      }
+      return [];
+    } catch (err) {
+      console.error("[BtrKorone/Koromons] getBadgeDefinitions failed:", err);
+      return this._badgeDefsCache || [];
+    }
+  },
+
+  /**
+   * Fetch a single user's calculated Koromons badge state.
+   *   { userId, badges: { id: true|false, ... }, hoardingBadges: [], customBadges: [] }
+   *
+   * The endpoint triggers a recalc + DB upsert on every call, so we cache
+   * per-user for USER_BADGES_CACHE_DURATION_MS to avoid hammering it on
+   * every DOM mutation observed by the profile-features content script.
+   * Returns null on failure.
+   */
+  async getUserBadges(userId) {
+    if (!userId) return null;
+    const key = String(userId);
+    const cached = this._userBadgesCache[key];
+    const now = Date.now();
+    if (cached && (now - cached.ts) < this.USER_BADGES_CACHE_DURATION_MS) {
+      return cached.data;
+    }
+
+    try {
+      const r = await fetch(`${this.API_ROOT}/users/${encodeURIComponent(key)}`, {
+        headers: { "Accept": "application/json" }
+      });
+      if (!r.ok) {
+        console.warn(`[BtrKorone/Koromons] getUserBadges(${key}) HTTP ${r.status}`);
+        return cached ? cached.data : null;
+      }
+      const data = await r.json();
+      this._userBadgesCache[key] = { data, ts: now };
+      return data;
+    } catch (err) {
+      console.error("[BtrKorone/Koromons] getUserBadges failed:", err);
+      return cached ? cached.data : null;
+    }
+  },
+
+  /**
+   * Fetch a single user's resolved custom badges (label + color + icon).
+   * The same data is also exposed under getUserBadges().customBadges, but
+   * this endpoint returns it pre-resolved with display metadata.
+   * Returns [] on failure.
+   */
+  async getUserCustomBadges(userId) {
+    if (!userId) return [];
+    try {
+      const r = await fetch(`${this.API_ROOT}/users/${encodeURIComponent(userId)}/user-badges`, {
+        headers: { "Accept": "application/json" }
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error("[BtrKorone/Koromons] getUserCustomBadges failed:", err);
       return [];
     }
   },
