@@ -228,7 +228,12 @@
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      launchGame(placeId);
+      // Visual hint that we're working on it
+      btn.classList.add("btrk-play-btn-loading");
+      launchGame(placeId).finally(() => {
+        // Remove the loading state once we've handed off to the OS
+        setTimeout(() => btn.classList.remove("btrk-play-btn-loading"), 1200);
+      });
     });
     return btn;
   }
@@ -257,9 +262,50 @@
     detailContainer.appendChild(btn);
   }
 
-  function launchGame(placeId) {
-    const playUrl = `https://www.pekora.zip/games/${placeId}/play`;
-    window.location.href = playUrl;
+  /**
+   * Launch a Pekora game directly via the same flow Pekora's own
+   * Play button uses:
+   *   1. GET /game/get-join-script?placeId=<id>  (returns { prefix, joinScriptUrl, ... })
+   *   2. Concatenate prefix + joinScriptUrl  ->  e.g. "pekora-player:1+launchmode:play+..."
+   *   3. Navigate the page to that custom-protocol URL, which the OS hands
+   *      off to the installed Pekora client.
+   *
+   * Falls back to the game detail page if anything fails so the user is
+   * never stuck.
+   */
+  async function launchGame(placeId) {
+    const fallbackUrl = `https://www.pekora.zip/games/${placeId}`;
+    try {
+      const res = await fetch(
+        `https://www.pekora.zip/game/get-join-script?placeId=${encodeURIComponent(placeId)}`,
+        {
+          credentials: "include",
+          headers: { "Accept": "application/json, text/plain, */*" }
+        }
+      );
+      if (!res.ok) {
+        console.warn(`[BtrKorone/PlayButton] join-script HTTP ${res.status}; falling back to game page.`);
+        window.location.href = fallbackUrl;
+        return;
+      }
+      const data = await res.json();
+      if (data && typeof data.prefix === "string" && typeof data.joinScriptUrl === "string") {
+        // Pekora returns the joinScriptUrl already starting with ":" so this
+        // simple concat yields e.g. "pekora-player:1+launchmode:play+..."
+        const launchUri = data.prefix + data.joinScriptUrl;
+        console.log(
+          `[BtrKorone/PlayButton] Launching place ${placeId} via ${data.prefix}://`
+        );
+        // Setting location.href triggers the OS protocol handler.
+        window.location.href = launchUri;
+        return;
+      }
+      console.warn("[BtrKorone/PlayButton] Unexpected join-script response:", data);
+      window.location.href = fallbackUrl;
+    } catch (err) {
+      console.error("[BtrKorone/PlayButton] Launch failed:", err);
+      window.location.href = fallbackUrl;
+    }
   }
 
   function removePlayButtons() {

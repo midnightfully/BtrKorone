@@ -5,7 +5,7 @@
 
 const BTRKORONE = {
   NAME: "BtrKorone",
-  VERSION: "2.3.1",
+  VERSION: "2.3.3",
 
   KORONE_BASE_URL: "https://www.pekora.zip",
   KORONE_GAMES_URL: "https://www.pekora.zip/games",
