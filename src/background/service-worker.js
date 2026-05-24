@@ -320,12 +320,33 @@ function broadcastMessage(message) {
 // first run we just record the IDs so we don't fire a wave of
 // notifications for old trades. On subsequent runs we notify for
 // any trade ID we haven't seen before.
+//
+// Notification format (RoPro-style "Trade Inbound" card):
+//   - Icon:    Partner's avatar headshot (fetched + converted to a
+//              data URL because chrome.notifications iconUrl needs
+//              extension-local or data: URLs to render reliably).
+//   - Title:   "Trade Inbound"
+//   - Message: Partner / Your Value / Their Value (multi-line)
+//   - Context: Loss/Gain/Even line, signed and color-prefixed
+//   - Buttons: [Open] [Decline]
+//
+// We also stash partner+trade metadata in `notifTradeCache` keyed by
+// notification ID so the button-click handler knows which trade to act
+// on. The cache survives only for the SW's lifetime, so the handler
+// also falls back to parsing the trade ID out of the notification ID
+// if the SW was restarted between display and click.
 // ============================================================
 
 const TRADE_NOTIF_ALARM = "btrkorone_check_trades";
 const SEEN_TRADE_IDS_KEY = "btrkorone_seen_trade_ids";
 const TRADE_NOTIF_PREFIX = "btrk-trade-";
 const SEEN_IDS_MAX = 200; // hard cap so storage doesn't grow forever
+
+const TRADES_PAGE_URL = "https://www.pekora.zip/My/Trades.aspx";
+const TRADE_DECLINE_URL = (id) =>
+  `https://www.pekora.zip/apisite/trades/v1/trades/${id}/decline`;
+
+const notifTradeCache = new Map(); // notifId -> { tradeId, partnerId }
 
 async function checkForNewTrades() {
   // Gate by tier + feature toggle so this is a cheap no-op for users
@@ -366,9 +387,15 @@ async function checkForNewTrades() {
     t => typeof t.id === "number" && !previouslySeen.includes(t.id)
   );
 
-  for (const trade of newTrades) {
-    showTradeNotification(trade);
+  // Best-effort: ensure the Koromons catalog is loaded so value math is
+  // accurate. If it fails we fall back to RAP-only sums.
+  if (newTrades.length > 0 && typeof KoromonsAPI !== "undefined" && !KoromonsAPI.isLoaded) {
+    try { await KoromonsAPI.load(); } catch (_) {}
   }
+
+  // Wait for all notification creates so the SW doesn't get torn down
+  // mid-fetch (avatar/detail fetches are async).
+  await Promise.allSettled(newTrades.map(t => showTradeNotification(t)));
 
   if (newTrades.length > 0) {
     console.log(
@@ -381,26 +408,224 @@ async function checkForNewTrades() {
   await chrome.storage.local.set({ [SEEN_TRADE_IDS_KEY]: merged });
 }
 
-function showTradeNotification(trade) {
+/**
+ * Build and display a rich "Trade Inbound" notification.
+ *
+ * Resilient to partial failure - if the trade detail or avatar fails
+ * to fetch, we still show a notification (just with a fallback icon
+ * and a short message instead of the value breakdown).
+ */
+async function showTradeNotification(trade) {
   const partnerName =
-    (trade.user && (trade.user.name || trade.user.username)) || "Someone";
+    (trade.user && (trade.user.displayName || trade.user.name || trade.user.username)) ||
+    "Someone";
+  const partnerId = trade.user && trade.user.id;
   const notifId = TRADE_NOTIF_PREFIX + trade.id;
 
-  chrome.notifications.create(notifId, {
+  const myUserId = await BtrStorage.getUserId();
+
+  // Fetch detail + avatar in parallel - both are independent.
+  const [detail, iconDataUrl] = await Promise.all([
+    PekoraAPI.getTradeDetail(trade.id).catch(() => null),
+    fetchAvatarAsDataUrl(partnerId).catch(() => null)
+  ]);
+
+  let messageLines;
+  let contextMessage = "";
+
+  if (detail && myUserId) {
+    const { myOffer, theirOffer } = PekoraAPI.splitTradeOffers(detail, Number(myUserId));
+    const myAssets = (myOffer && myOffer.userAssets) || [];
+    const theirAssets = (theirOffer && theirOffer.userAssets) || [];
+    const myCalc = PekoraAPI.calculateOfferValue(myAssets);
+    const theirCalc = PekoraAPI.calculateOfferValue(theirAssets);
+
+    // myCalc.totalValue = what the user gives up; theirCalc.totalValue =
+    // what they receive. Diff = receive - give. Positive diff = gain.
+    const yourValue = myCalc.totalValue;
+    const theirValue = theirCalc.totalValue;
+    const diff = theirValue - yourValue;
+
+    messageLines = [
+      `Partner: ${partnerName}`,
+      `Your Value: ${yourValue.toLocaleString()}`,
+      `Their Value: ${theirValue.toLocaleString()}`
+    ];
+
+    if (diff > 0) {
+      contextMessage = `Gain: +${diff.toLocaleString()} Value`;
+    } else if (diff < 0) {
+      // diff is negative, so it already prints with a minus sign.
+      contextMessage = `Loss: ${diff.toLocaleString()} Value`;
+    } else {
+      contextMessage = `Even: 0 Value`;
+    }
+  } else {
+    // Fallback: detail unavailable (auth issue, network, etc.)
+    messageLines = [
+      `Partner: ${partnerName}`,
+      `New trade request received`
+    ];
+  }
+
+  notifTradeCache.set(notifId, { tradeId: trade.id, partnerId });
+
+  const options = {
     type: "basic",
-    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-    title: "New Trade Request",
-    message: `${partnerName} sent you a trade request`,
+    iconUrl: iconDataUrl || chrome.runtime.getURL("icons/icon128.png"),
+    title: "Trade Inbound",
+    message: messageLines.join("\n"),
     priority: 1,
-    requireInteraction: false
+    requireInteraction: false,
+    buttons: [
+      { title: "Open" },
+      { title: "Decline" }
+    ]
+  };
+  if (contextMessage) options.contextMessage = contextMessage;
+
+  return new Promise(resolve => {
+    chrome.notifications.create(notifId, options, () => resolve());
   });
 }
 
-// Click on a trade notification -> open the Korone trades page
+/**
+ * Fetch a Pekora user's headshot and return it as a data URL.
+ *
+ * `chrome.notifications.create` in MV3 service workers does not reliably
+ * render http(s) iconUrls (the SW has no DOM/<img> to preload them), so
+ * we fetch the bytes ourselves and inline them. FileReader is available
+ * in the SW global scope.
+ */
+async function fetchAvatarAsDataUrl(userId) {
+  if (!userId) return null;
+  try {
+    const url = PekoraAPI.getAvatarUrl(userId);
+    const r = await fetch(url, { credentials: "include" });
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+// ------------------------------------------------------------
+// CSRF-aware POST helper for the SW
+// ------------------------------------------------------------
+// Pekora returns 403 + an `x-csrf-token` header when a state-changing
+// POST is made without one. We retry once with that header. The token
+// is cached per-SW so we don't pay the round-trip on every action.
+
+let _swCsrfToken = "";
+
+async function pekoraCsrfPost(url) {
+  const tryPost = async (token) => {
+    const headers = {
+      "Accept": "application/json",
+      "Content-Type": "application/json"
+    };
+    if (token) headers["x-csrf-token"] = token;
+    return fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: "{}"
+    });
+  };
+
+  let resp = await tryPost(_swCsrfToken);
+  if (resp.status === 403) {
+    const fresh = resp.headers.get("x-csrf-token");
+    if (fresh && fresh !== _swCsrfToken) {
+      _swCsrfToken = fresh;
+      resp = await tryPost(_swCsrfToken);
+    }
+  }
+  if (!resp.ok) {
+    let msg = "HTTP " + resp.status;
+    try {
+      const j = await resp.json();
+      if (j && j.errors && j.errors[0] && j.errors[0].message) {
+        msg = j.errors[0].message;
+      }
+    } catch (_) {}
+    throw new Error(msg);
+  }
+  return resp;
+}
+
+// ------------------------------------------------------------
+// Notification click handlers
+// ------------------------------------------------------------
+// Clicking the body opens the trades page (same as before).
+// Buttons: 0 = Open (open the trades page), 1 = Decline (POST decline).
+
 chrome.notifications.onClicked.addListener((notifId) => {
   if (typeof notifId !== "string" || !notifId.startsWith(TRADE_NOTIF_PREFIX)) return;
-  chrome.tabs.create({ url: "https://www.pekora.zip/My/Trades.aspx" });
+  chrome.tabs.create({ url: TRADES_PAGE_URL });
   chrome.notifications.clear(notifId);
+  notifTradeCache.delete(notifId);
+});
+
+chrome.notifications.onButtonClicked.addListener(async (notifId, buttonIndex) => {
+  if (typeof notifId !== "string" || !notifId.startsWith(TRADE_NOTIF_PREFIX)) return;
+
+  // Prefer the in-memory cache, but fall back to parsing the trade ID
+  // out of the notification ID itself - this matters if the SW was
+  // suspended between create and click.
+  let tradeId = null;
+  const cached = notifTradeCache.get(notifId);
+  if (cached) {
+    tradeId = cached.tradeId;
+  } else {
+    const parsed = Number(notifId.slice(TRADE_NOTIF_PREFIX.length));
+    if (!Number.isNaN(parsed)) tradeId = parsed;
+  }
+
+  if (buttonIndex === 0) {
+    // OPEN -> trades page (deep linking to a specific trade isn't
+    // supported by Pekora's UI, so we just land on the list).
+    chrome.tabs.create({ url: TRADES_PAGE_URL });
+    chrome.notifications.clear(notifId);
+    notifTradeCache.delete(notifId);
+    return;
+  }
+
+  if (buttonIndex === 1) {
+    // DECLINE -> POST against the trades API. We surface a small
+    // follow-up notification to confirm success or report failure.
+    if (!tradeId) {
+      chrome.notifications.clear(notifId);
+      return;
+    }
+    try {
+      await pekoraCsrfPost(TRADE_DECLINE_URL(tradeId));
+      chrome.notifications.clear(notifId);
+      notifTradeCache.delete(notifId);
+      chrome.notifications.create(notifId + "-declined", {
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "Trade Declined",
+        message: "The trade was declined successfully.",
+        priority: 0
+      });
+    } catch (err) {
+      console.error("[BtrKorone/TradeNotif] Decline failed:", err);
+      chrome.notifications.create(notifId + "-error", {
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: "Decline Failed",
+        message: (err && err.message) || "Could not decline the trade.",
+        priority: 1
+      });
+    }
+  }
 });
 
 // When the user toggles tradeNotifications off, reset the seen-IDs
