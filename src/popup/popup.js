@@ -264,7 +264,7 @@ function setupModal() {
     document.getElementById("token-display").style.display = "block";
     document.getElementById("token-value").textContent = result.token;
     document.getElementById("btn-verify").style.display = "block";
-    showMessage("Token generated! Paste it in your Korone About Me, then click Verify.", "info");
+    showMessage("Token generated! Paste it in your Korone About Me, then click Verify Subscription.", "info");
   });
 
   document.getElementById("btn-copy-token").addEventListener("click", () => {
@@ -282,20 +282,21 @@ function setupModal() {
     if (!userId || !token) { showMessage("Generate a token first.", "error"); return; }
 
     const btn = document.getElementById("btn-verify");
-    btn.textContent = "Linking...";
+    btn.textContent = "Verifying...";
     btn.disabled = true;
 
-    const result = await sendMessage({ type: "LINK_ACCOUNT", userId, token });
+    const result = await sendMessage({ type: "VERIFY_PREMIUM", userId, token });
 
-    btn.textContent = "Verify & Link Account";
+    btn.textContent = "Verify Subscription";
     btn.disabled = false;
 
     if (result.success) {
-      showMessage(result.message || "Account linked.", "success");
+      showMessage(result.message || "Subscription activated!", "success");
       await loadFullState();
-      setTimeout(closeVerifyModal, 2000);
+      setTimeout(closeVerifyModal, 2500);
     } else {
-      showMessage(result.message || result.error, "error");
+      // Surface the most informative message we got back
+      showMessage(result.message || result.error || "Verification failed.", "error");
     }
   });
 
