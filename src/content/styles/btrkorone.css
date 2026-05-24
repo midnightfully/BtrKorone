@@ -174,7 +174,7 @@ body.btrkorone-active {
 .tm-view-btn:hover { background: #369952; }
 
 .tm-loading-row td {
-  color: #888;
+  color: #c0c0cc;
   font-size: 12px;
   padding: 10px !important;
 }
@@ -198,7 +198,7 @@ body.btrkorone-active {
 }
 
 .tm-modal {
-  background: #1a1a2e;
+  background: #2a2a3f;
   border-radius: 12px;
   width: 760px;
   max-width: calc(100vw - 32px);
@@ -206,7 +206,7 @@ body.btrkorone-active {
   overflow: hidden;
   position: relative;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: #e0e0e0;
+  color: #f0f0f5;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
@@ -222,10 +222,10 @@ body.btrkorone-active {
   text-align: center;
   font-size: 17px;
   font-weight: 800;
-  color: #fff;
+  color: #ffffff;
   padding: 14px 52px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
   flex-shrink: 0;
 }
 
@@ -236,14 +236,14 @@ body.btrkorone-active {
   cursor: pointer;
   font-size: 11px;
   font-weight: 900;
-  color: #aaa;
+  color: #d0d0d8;
   width: 23px;
   height: 23px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 2px solid #777;
+  border: 2px solid #888;
   line-height: 1;
   user-select: none;
   transition: color 0.15s, border-color 0.15s;
@@ -265,8 +265,8 @@ body.btrkorone-active {
 .tm-sidebar {
   width: 170px;
   flex-shrink: 0;
-  background: rgba(0, 0, 0, 0.20);
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.14);
+  border-right: 1px solid rgba(255, 255, 255, 0.10);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -277,7 +277,7 @@ body.btrkorone-active {
 .tm-sidebar::-webkit-scrollbar { width: 0; }
 
 .tm-sidebar-loading {
-  color: #777;
+  color: #aaa;
   font-size: 12px;
   text-align: center;
   padding-top: 40px;
@@ -290,19 +290,19 @@ body.btrkorone-active {
   object-fit: cover;
   display: block;
   margin-bottom: 11px;
-  background: #2a2a3a;
+  background: #38384c;
 }
 
 .tm-trade-status {
   font-size: 12px;
   text-align: center;
-  color: #ccc;
+  color: #ececf2;
   line-height: 1.5;
   margin-bottom: 12px;
   word-break: break-word;
 }
 .tm-trade-status .tm-partner-link {
-  color: #fff;
+  color: #ffffff;
   font-weight: 800;
   text-decoration: none;
 }
@@ -318,16 +318,16 @@ body.btrkorone-active {
   font-variant-numeric: tabular-nums;
 }
 .tm-diff.pos { color: #00e87e; }
-.tm-diff.neg { color: #f4645d; }
-.tm-diff.neu { color: #888; }
+.tm-diff.neg { color: #ff7872; }
+.tm-diff.neu { color: #c0c0cc; }
 
 .tm-sidebar-lbl {
   font-size: 10px;
-  color: #888;
+  color: #c8c8d4;
   margin-bottom: 4px;
   margin-top: 8px;
   width: 100%;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
   font-weight: 700;
 }
@@ -345,8 +345,8 @@ body.btrkorone-active {
   margin-bottom: 4px;
   font-variant-numeric: tabular-nums;
 }
-.tm-sidebar-valrow.kol   { color: #ffb547; }
-.tm-sidebar-valrow.rap   { color: #2ec27e; }
+.tm-sidebar-valrow.kol   { color: #ffc870; }
+.tm-sidebar-valrow.rap   { color: #4cd99a; }
 .tm-sidebar-valrow.robux { color: #00e87e; }
 
 /* === Value icons (the small coin-shaped K / R$ markers) === */
@@ -387,7 +387,7 @@ body.btrkorone-active {
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  background: #1a1a2e;
+  background: #2a2a3f;
   scrollbar-width: thin;
 }
 .tm-content::-webkit-scrollbar { width: 0; }
@@ -398,8 +398,8 @@ body.btrkorone-active {
   padding: 40px 20px;
   font-size: 13px;
 }
-.tm-content-loading { color: #888; }
-.tm-error           { color: #f87171; }
+.tm-content-loading { color: #c0c0cc; }
+.tm-error           { color: #ff7872; }
 
 .tm-section {
   display: flex;
@@ -408,7 +408,7 @@ body.btrkorone-active {
 .tm-section-label {
   font-size: 13px;
   font-weight: 800;
-  color: #fff;
+  color: #ffffff;
   margin: 0 0 10px;
   letter-spacing: 0.2px;
 }
@@ -423,7 +423,7 @@ body.btrkorone-active {
 
 .tm-slot-empty-msg {
   font-size: 12px;
-  color: #666;
+  color: #aaa;
   font-style: italic;
   padding: 30px 0;
   width: 100%;
@@ -441,7 +441,7 @@ body.btrkorone-active {
   position: relative;
   width: 110px;
   height: 110px;
-  background: #2a2a3a;
+  background: #38384c;
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
@@ -475,7 +475,7 @@ body.btrkorone-active {
   border-radius: 4px;
   font-size: 8px;
   font-weight: 600;
-  color: #aaa;
+  color: #d0d0d8;
   padding: 1px 5px;
   line-height: 1.4;
   white-space: nowrap;
@@ -484,7 +484,7 @@ body.btrkorone-active {
 
 .tm-slot-name {
   font-size: 11px;
-  color: #fff;
+  color: #ffffff;
   font-weight: 700;
   margin: 6px 0 4px;
   line-height: 1.35;
@@ -497,11 +497,11 @@ body.btrkorone-active {
   overflow: hidden;
 }
 .tm-slot-name a {
-  color: #fff;
+  color: #ffffff;
   text-decoration: none;
 }
 .tm-slot-name a:hover {
-  color: #4a9eff;
+  color: #6fb5ff;
 }
 
 .tm-slot-val-row {
@@ -513,8 +513,8 @@ body.btrkorone-active {
   line-height: 1.6;
   font-variant-numeric: tabular-nums;
 }
-.tm-slot-val-row.kol { color: #ffb547; }
-.tm-slot-val-row.rap { color: #2ec27e; }
+.tm-slot-val-row.kol { color: #ffc870; }
+.tm-slot-val-row.rap { color: #4cd99a; }
 
 /* === Per-section totals === */
 
@@ -526,7 +526,7 @@ body.btrkorone-active {
 }
 .tm-section-total-label {
   font-size: 12px;
-  color: #bbb;
+  color: #e0e0e8;
   font-weight: 600;
   padding-top: 2px;
 }
@@ -545,8 +545,8 @@ body.btrkorone-active {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
-.tm-section-total-kol { color: #ffb547; }
-.tm-section-total-rap { color: #2ec27e; }
+.tm-section-total-kol { color: #ffc870; }
+.tm-section-total-rap { color: #4cd99a; }
 
 .tm-section-robux {
   display: flex;
@@ -568,7 +568,7 @@ body.btrkorone-active {
 
 .tm-divider {
   border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
   margin: 0 0 16px;
 }
 
@@ -579,8 +579,8 @@ body.btrkorone-active {
   justify-content: center;
   gap: 10px;
   padding: 14px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.20);
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(0, 0, 0, 0.18);
   flex-shrink: 0;
 }
 
@@ -605,8 +605,8 @@ body.btrkorone-active {
 .tm-btn-counter,
 .tm-btn-decline {
   background: transparent;
-  color: #fff;
-  border: 2px solid #555;
+  color: #f0f0f5;
+  border: 2px solid #777;
   border-radius: 8px;
   padding: 9px 28px;
   font-size: 14px;
@@ -617,8 +617,8 @@ body.btrkorone-active {
 }
 .tm-btn-counter:hover,
 .tm-btn-decline:hover {
-  border-color: #999;
-  background: rgba(255, 255, 255, 0.05);
+  border-color: #bbb;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .tm-btn-ok:disabled,

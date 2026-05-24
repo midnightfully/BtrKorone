@@ -368,8 +368,20 @@
       const myCalc = PekoraAPI.calculateOfferValue(myAssets);
       const theirCalc = PekoraAPI.calculateOfferValue(theirAssets);
 
-      // The score field falls back to RAP when Koromons doesn't know an item,
-      // so it's the right number for "effective value" / win-loss diff.
+      // The score field in calc.totalValue falls back to RAP when an item
+      // isn't in the Koromons catalog, so it's the right number for the
+      // headline diff (best-available worth on each side). For displaying
+      // the per-side "K" totals we only sum items that ACTUALLY have a
+      // Koromons value - otherwise an RAP-only side would lie about having
+      // a community value of N.
+      const myKolTotal     = myCalc.items.filter(i => i.hasKoromonValue)
+                                         .reduce((s, i) => s + i.koromonValue, 0);
+      const theirKolTotal  = theirCalc.items.filter(i => i.hasKoromonValue)
+                                            .reduce((s, i) => s + i.koromonValue, 0);
+      const myValuedCount    = myCalc.items.filter(i => i.hasKoromonValue).length;
+      const theirValuedCount = theirCalc.items.filter(i => i.hasKoromonValue).length;
+      const anyValued = myValuedCount > 0 || theirValuedCount > 0;
+
       const myValue = myCalc.totalValue;
       const theirValue = theirCalc.totalValue;
       const myRap = myCalc.totalRap;
@@ -393,19 +405,27 @@
       renderSidebar(sidebar, {
         avatarUrl, partnerName, partnerId, isInbound,
         tradeStatus: detail.status,
-        valDiff,
-        myValue, myRap, myRobux,
-        theirValue, theirRap, theirRobux
+        valDiff, anyValued,
+        myKolTotal, myValuedCount, myRap, myRobux,
+        theirKolTotal, theirValuedCount, theirRap, theirRobux
       });
 
       content.innerHTML = "";
-      content.appendChild(renderSection("Items you will give", myCalc.items, myAssets, thumbMap, myValue, myRap, myRobux));
+      content.appendChild(renderSection(
+        "Items you will give",
+        myCalc.items, myAssets, thumbMap,
+        myKolTotal, myRap, myValuedCount, myRobux
+      ));
 
       const hr = document.createElement("hr");
       hr.className = "tm-divider";
       content.appendChild(hr);
 
-      content.appendChild(renderSection("Items you will receive", theirCalc.items, theirAssets, thumbMap, theirValue, theirRap, theirRobux));
+      content.appendChild(renderSection(
+        "Items you will receive",
+        theirCalc.items, theirAssets, thumbMap,
+        theirKolTotal, theirRap, theirValuedCount, theirRobux
+      ));
 
     } catch (e) {
       sidebar.innerHTML = "";
@@ -443,21 +463,26 @@
     ));
     sidebar.appendChild(status);
 
-    // Big colored value-diff headline (RoPro-style)
+    // Big colored value-diff headline (RoPro-style). Label says "Value"
+    // when at least one item on either side has a community Koromons value;
+    // otherwise this is a pure RAP comparison and we say so.
     const diffCls = opts.valDiff > 0 ? "pos" : opts.valDiff < 0 ? "neg" : "neu";
     const diffStr = (opts.valDiff >= 0 ? "+" : "") + opts.valDiff.toLocaleString();
+    const diffLbl = opts.anyValued ? "Value" : "RAP";
     const diffEl = document.createElement("div");
     diffEl.className = `tm-diff ${diffCls}`;
-    diffEl.textContent = `${diffStr} Value`;
+    diffEl.textContent = `${diffStr} ${diffLbl}`;
     sidebar.appendChild(diffEl);
 
     sidebar.appendChild(sideLbl("You're offering:"));
-    sidebar.appendChild(sideValRow("kol", opts.myValue));
+    // K row only renders when at least one item is in the Koromons catalog -
+    // otherwise we'd be making up a "value" that doesn't exist.
+    if (opts.myValuedCount > 0) sidebar.appendChild(sideValRow("kol", opts.myKolTotal));
     sidebar.appendChild(sideValRow("rap", opts.myRap));
     if (opts.myRobux) sidebar.appendChild(sideValRow("robux", opts.myRobux));
 
     sidebar.appendChild(sideLbl("They're offering:"));
-    sidebar.appendChild(sideValRow("kol", opts.theirValue));
+    if (opts.theirValuedCount > 0) sidebar.appendChild(sideValRow("kol", opts.theirKolTotal));
     sidebar.appendChild(sideValRow("rap", opts.theirRap));
     if (opts.theirRobux) sidebar.appendChild(sideValRow("robux", opts.theirRobux));
   }
@@ -494,7 +519,7 @@
     return ic;
   }
 
-  function renderSection(label, calcItems, rawAssets, thumbMap, kolTotal, rapTotal, robuxAmt) {
+  function renderSection(label, calcItems, rawAssets, thumbMap, kolTotal, rapTotal, valuedCount, robuxAmt) {
     const sec = document.createElement("div");
     sec.className = "tm-section";
 
@@ -522,21 +547,27 @@
 
     sec.appendChild(grid);
 
-    // Per-section totals (Korone Value + RAP)
+    // Per-section totals. We always show RAP because every Pekora item has
+    // one. The Koromons "Value" total only appears when at least one item
+    // on this side is in the catalog - we don't want to claim a community
+    // value that doesn't exist for RAP-only items.
     const tot = document.createElement("div");
     tot.className = "tm-section-total";
     const totLbl = document.createElement("span");
     totLbl.className = "tm-section-total-label";
-    totLbl.textContent = "Total Value:";
+    totLbl.textContent = valuedCount > 0 ? "Total Value:" : "Total RAP:";
     const totVals = document.createElement("div");
     totVals.className = "tm-section-total-vals";
 
-    const tKol = document.createElement("div");
-    tKol.className = "tm-section-total-kol";
-    tKol.appendChild(valIcon("kol"));
-    const tKolN = document.createElement("span");
-    tKolN.textContent = kolTotal.toLocaleString();
-    tKol.appendChild(tKolN);
+    if (valuedCount > 0) {
+      const tKol = document.createElement("div");
+      tKol.className = "tm-section-total-kol";
+      tKol.appendChild(valIcon("kol"));
+      const tKolN = document.createElement("span");
+      tKolN.textContent = kolTotal.toLocaleString();
+      tKol.appendChild(tKolN);
+      totVals.appendChild(tKol);
+    }
 
     const tRap = document.createElement("div");
     tRap.className = "tm-section-total-rap";
@@ -544,9 +575,8 @@
     const tRapN = document.createElement("span");
     tRapN.textContent = rapTotal.toLocaleString();
     tRap.appendChild(tRapN);
-
-    totVals.appendChild(tKol);
     totVals.appendChild(tRap);
+
     tot.appendChild(totLbl);
     tot.appendChild(totVals);
     sec.appendChild(tot);
@@ -607,18 +637,19 @@
     nameDiv.appendChild(nameA);
     slot.appendChild(nameDiv);
 
-    // Korone Value (falls back to RAP if no community value is known) +
-    // raw RAP. Both rows always render so columns line up across slots.
-    const kolValue = (calcItem && calcItem.hasKoromonValue) ? calcItem.koromonValue : 0;
+    // Korone Value row only renders when this item is actually in the
+    // koromons.com catalog. RAP is shown for every item.
     const rap = rawAsset.recentAveragePrice || 0;
 
-    const kolRow = document.createElement("div");
-    kolRow.className = "tm-slot-val-row kol";
-    kolRow.appendChild(valIcon("kol"));
-    const kolN = document.createElement("span");
-    kolN.textContent = (kolValue || rap).toLocaleString();
-    kolRow.appendChild(kolN);
-    slot.appendChild(kolRow);
+    if (calcItem && calcItem.hasKoromonValue) {
+      const kolRow = document.createElement("div");
+      kolRow.className = "tm-slot-val-row kol";
+      kolRow.appendChild(valIcon("kol"));
+      const kolN = document.createElement("span");
+      kolN.textContent = calcItem.koromonValue.toLocaleString();
+      kolRow.appendChild(kolN);
+      slot.appendChild(kolRow);
+    }
 
     const rapRow = document.createElement("div");
     rapRow.className = "tm-slot-val-row rap";
