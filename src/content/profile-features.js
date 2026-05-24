@@ -31,11 +31,11 @@
 
   const PROFILE_PATH_RX = /\/users\/(\d+)\/profile/i;
 
-  // Where the "See All" link points. The Koromons site uses /players/:id
-  // for individual player profiles (matches their /api/users/:id and the
-  // playerRanks collection referenced in the API docs). If the route ever
-  // changes, this is the only place to update.
-  const KOROMONS_PLAYER_URL = (id) => `https://www.koromons.com/players/${id}`;
+  // Where the "See All" link points. The Koromons site uses /player/:id
+  // (singular) for individual player profiles - confirmed via the Referer
+  // header on a real /api/users/:id/user-badges request from koromons.com.
+  // If the route ever changes, this is the only place to update.
+  const KOROMONS_PLAYER_URL = (id) => `https://www.koromons.com/player/${id}`;
 
   let observer = null;
   let scheduled = false;
