@@ -5,7 +5,7 @@
 
 const BTRKORONE = {
   NAME: "BtrKorone",
-  VERSION: "2.4.2",
+  VERSION: "2.4.3",
 
   KORONE_BASE_URL: "https://www.pekora.zip",
   KORONE_GAMES_URL: "https://www.pekora.zip/games",
@@ -17,8 +17,7 @@ const BTRKORONE = {
     USER_HEADSHOT: "https://www.pekora.zip/headshot-thumbnail/image?userId={userId}&width=150&height=150&format=png",
     USER_PROFILE_PAGE: "https://www.pekora.zip/users/{userId}/profile",
     INVENTORY: "https://www.pekora.zip/apisite/inventory/v2/users/{userId}/assets/collectibles?limit=100&sortOrder=Desc",
-    GAME_JOIN: "https://www.pekora.zip/games/{placeId}/play",
-    GAMEPASS_PAGE: "https://www.pekora.zip/Item.aspx?id={gamepassId}"
+    GAME_JOIN: "https://www.pekora.zip/games/{placeId}/play"
   },
 
   GAMEPASS_API: {
@@ -26,9 +25,24 @@ const BTRKORONE = {
   },
 
   TIERS: {
-    FREE: { id: 0, name: "Free", label: "BtrKorone Free", color: "#8e8e8e", badge: null, cssClass: "tier-free" },
-    PLUS: { id: 1, name: "Plus", label: "BtrKorone+", color: "#4fc3f7", badge: "+", cssClass: "tier-plus", gamepassId: 721129, price: "One-time Robux purchase" },
-    REX:  { id: 2, name: "Rex",  label: "BtrKorone Rex", color: "#ffd700", badge: "REX", cssClass: "tier-rex", gamepassId: 721215, price: "One-time Robux purchase" }
+    FREE: {
+      id: 0, name: "Free", label: "BtrKorone Free",
+      color: "#8e8e8e", badge: null, cssClass: "tier-free"
+    },
+    PLUS: {
+      id: 1, name: "Plus", label: "BtrKorone+",
+      color: "#4fc3f7", badge: "+", cssClass: "tier-plus",
+      gamepassId: 721129,
+      gamepassUrl: "https://www.pekora.zip/catalog/721129/BtrKoronePlus",
+      price: "One-time Robux purchase"
+    },
+    REX: {
+      id: 2, name: "Rex", label: "BtrKorone Rex",
+      color: "#ffd700", badge: "REX", cssClass: "tier-rex",
+      gamepassId: 721215,
+      gamepassUrl: "https://www.pekora.zip/catalog/721215/BtrKorone-Rex",
+      price: "One-time Robux purchase"
+    }
   },
 
   STORAGE_KEYS: {

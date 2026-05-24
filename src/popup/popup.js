@@ -205,17 +205,17 @@ function setupActions() {
   // Tier upgrade buttons (shown inside the Plus / Rex tab panels)
   const plusBtn = document.getElementById("upgrade-plus-btn");
   if (plusBtn) {
-    plusBtn.addEventListener("click", () => openGamepassPage(BTRKORONE.TIERS.PLUS.gamepassId));
+    plusBtn.addEventListener("click", () => openGamepassPage(BTRKORONE.TIERS.PLUS));
   }
   const rexBtn = document.getElementById("upgrade-rex-btn");
   if (rexBtn) {
-    rexBtn.addEventListener("click", () => openGamepassPage(BTRKORONE.TIERS.REX.gamepassId));
+    rexBtn.addEventListener("click", () => openGamepassPage(BTRKORONE.TIERS.REX));
   }
 }
 
-function openGamepassPage(gamepassId) {
-  const url = BTRKORONE.PEKORA_API.GAMEPASS_PAGE.replace("{gamepassId}", gamepassId);
-  window.open(url, "_blank");
+function openGamepassPage(tier) {
+  if (!tier || !tier.gamepassUrl) return;
+  window.open(tier.gamepassUrl, "_blank");
 }
 
 // === Verification Modal ===
