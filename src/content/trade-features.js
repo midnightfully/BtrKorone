@@ -1,160 +1,44 @@
 /**
- * BtrKorone - Trade Modal Enhancement (Rex tier)
+ * BtrKorone - Trade Modal Replacement (Rex tier)
  *
- * RoPro-style enhancement injected directly into Pekora's trade modal.
+ * Architecture (v2.5+, inspired by the Korone All-in-One userscript by Dior):
  *
- * Per-item card:
- *   - Top-right Robux pill badge with Korone value (or RAP fallback)
- *   - Color-coded demand dot
+ * Instead of injecting badges/banners INTO Pekora's native trade modal (which
+ * was fragile due to animation timing, hashed CSS selectors, modal reuse, and
+ * race conditions), we own the entire trade UI on /My/Trades.aspx:
  *
- * Per-section (under each "Value: R$ XXX"):
- *   - Korone Rolimons Value (sum of Koromons.Value for each item)
- *   - Korone Demand Rating (X.X / 5.0)
+ *   1. Wait for Pekora's trades table + type selector.
+ *   2. Fetch all trades of the selected type via the Pekora API.
+ *   3. Hide Pekora's native rows. Inject our own rows + custom "View Details"
+ *      button (intercepted with capture-phase + stopImmediatePropagation so
+ *      Pekora's native handler never fires).
+ *   4. On click, open our own modal: sidebar (avatar, partner, value diff,
+ *      per-side Korone Value / RAP / Robux breakdown), content (give &
+ *      receive item grids with totals), footer (Accept / Counter / Decline
+ *      that POST directly to /apisite/trades/v1/trades/{id}/{action}).
  *
- * Between the two sections:
- *   - Net change indicator: green ↑ +N (X%) for profit, red ↓ -N (-X%) for loss
- *
- * Uses Pekora's trade API (credentials:include) for real data.
+ * No more "sometimes broken layout" - we control every pixel.
  */
 
 (function BtrTradeModalFeature() {
   "use strict";
 
   const TRADE_PAGES = ["/My/Trades.aspx", "/My/Trades", "/trades"];
-  // Pekora serves item thumbs from several paths. Match permissively then let
-  // findCardAnchor's size heuristic filter out non-item images (avatars, etc).
-  const THUMB_SRC_RX = /\/(images\/thumbnails|thumbnails|asset-thumbnail|item-thumbnail|asset)\//i;
+  const BASE = "https://www.pekora.zip";
+  const TRADE_API = `${BASE}/apisite/trades/v1/trades`;
+  const THUMB_API = `${BASE}/apisite/thumbnails/v1`;
 
-  // ============================================================
-  // MINIMAL MODE
-  // ------------------------------------------------------------
-  // When true, we don't surgically modify Pekora's modal DOM (no per-card
-  // pills, no section summary rows, no net-change indicator wedged between
-  // sections). Instead we append a single self-contained "Trade Analysis"
-  // panel near the modal footer. This guarantees we don't break Pekora's
-  // layout while still surfacing the verdict + values + demand.
-  //
-  // Set to false (or build a popup toggle) to re-enable the RoPro-style
-  // full injection once the layout interaction is sorted out.
-  // ============================================================
-  const MINIMAL_MODE = true;
-
-  // Demand string -> 1-5 numeric rating
-  const DEMAND_RATING = {
-    "Very High": 5,
-    "High":      4,
-    "Medium":    3,
-    "Low":       2,
-    "Very Low":  1
-  };
-
-  let cachedMyUserId = null;
-  let cachedTrades = [];
-  let injectedTradeKey = null;
-  let pendingResolveKey = null; // dedupe in-flight resolution attempts
-
-  // Trade ID hint captured from the user's most recent click. The "View
-  // Details" link / button on a trade row almost always embeds the trade
-  // ID in onclick / href / data-* attributes; capturing it on click is far
-  // more reliable than trying to scrape the modal afterwards.
-  let lastTradeHint = { id: null, ts: 0 };
-  // Full trade detail captured by the page-spy when Pekora itself fetched it.
-  // Lets us skip our own refetch + cache lookup entirely.
-  let lastTradeDetail = { id: null, detail: null, ts: 0 };
-  const HINT_TTL_MS = 8000;
-
-  function isTradePage() {
-    return TRADE_PAGES.some(p => window.location.pathname.toLowerCase().includes(p.toLowerCase()));
-  }
-
-  /**
-   * Listen for trade-id hints AND full trade-detail payloads relayed from
-   * the page-spy script. The spy intercepts Pekora's own
-   * /apisite/trades/v1/trades/{id} fetch and posts both the trade ID
-   * (immediately on URL match) and, when the response arrives, the full
-   * parsed JSON. Using the cached detail lets us skip our own refetch.
-   */
-  function installFetchSpyListener() {
-    window.addEventListener("message", (event) => {
-      // Only accept messages from this exact window (the page itself)
-      if (event.source !== window) return;
-      const data = event.data;
-      if (!data || data.__btrkorone !== true) return;
-
-      if (data.type === "TRADE_FETCH") {
-        const raw = String(data.tradeId || "");
-        if (!/^\d{3,12}$/.test(raw)) return;
-        lastTradeHint = { id: raw, ts: Date.now() };
-        console.log(`[BtrKorone/Trades] Fetch spy captured trade ID: ${raw}`);
-        return;
-      }
-
-      if (data.type === "TRADE_DETAIL" && data.detail) {
-        const raw = String(data.tradeId || "");
-        if (!/^\d{3,12}$/.test(raw)) return;
-        lastTradeDetail = { id: raw, detail: data.detail, ts: Date.now() };
-        // The hint is cheaper to use elsewhere too
-        lastTradeHint = { id: raw, ts: Date.now() };
-        console.log(`[BtrKorone/Trades] Spy captured full detail for trade ${raw}`);
-        // Don't enhance directly here - let the MutationObserver fire
-        // tryEnhanceVisibleModal once the modal DOM is actually present.
-      }
-    });
-  }
-
-  /**
-   * Inject the page-spy script tag into the page's main world as a fallback
-   * for browsers / setups where world:"MAIN" content_scripts don't load.
-   * The spy itself self-guards against double-installation.
-   */
-  function injectPageSpyFallback() {
-    try {
-      if (window.__btrkPageSpyInstalled) return; // MAIN-world load already won
-      const s = document.createElement("script");
-      s.src = chrome.runtime.getURL("content/page-spy.js");
-      s.async = false;
-      s.onload = () => s.remove();
-      (document.head || document.documentElement).appendChild(s);
-    } catch (e) {
-      console.warn("[BtrKorone/Trades] Could not inject page-spy fallback:", e);
-    }
-  }
-
-  /**
-   * Install a capture-phase click listener that scans the clicked element
-   * (and a few ancestors) for anything that looks like a trade ID.
-   */
-  function installClickHintCapture() {
-    document.addEventListener("click", (e) => {
-      let el = e.target;
-      for (let depth = 0; depth < 6 && el && el.nodeType === 1; depth++) {
-        const out = (el.outerHTML || "").slice(0, 2000);
-        // Match common shapes:
-        //   data-trade-id="12345" / tradeid:12345 / trade=12345
-        //   ?id=12345 / &tradeid=12345 / /trades/12345
-        //   ShowTradeDetails(12345) / OpenTrade(12345)
-        const patterns = [
-          /(?:tradeid|trade[_-]?id|data-trade|data-id)\s*[="':\s]+(\d{4,10})/i,
-          /[?&](?:id|tradeid|trade)=(\d{4,10})/i,
-          /\/trades?\/(\d{4,10})/i,
-          /(?:ShowTrade|OpenTrade|ViewTrade)[^(]*\(\s*['"]?(\d{4,10})['"]?\s*[,)]/i
-        ];
-        for (const rx of patterns) {
-          const m = out.match(rx);
-          if (m) {
-            lastTradeHint = { id: m[1], ts: Date.now() };
-            console.log(`[BtrKorone/Trades] Click captured trade ID hint: ${m[1]}`);
-            return;
-          }
-        }
-        el = el.parentElement;
-      }
-    }, /* useCapture = */ true);
-  }
+  let myUserId = null;
+  let csrfToken = "";
 
   // ============================================================
   // INIT
   // ============================================================
+
+  function isTradePage() {
+    return TRADE_PAGES.some(p =>
+      window.location.pathname.toLowerCase().includes(p.toLowerCase()));
+  }
 
   const waitForInit = setInterval(() => {
     if (!window.__btrkorone) return;
@@ -169,664 +53,723 @@
 
     if (typeof PekoraAPI !== "undefined") {
       const me = await PekoraAPI.getAuthenticatedUser();
-      if (me) cachedMyUserId = me.id;
+      if (me) myUserId = me.id;
     }
-    if (!cachedMyUserId) {
+    if (!myUserId) {
       try {
         const status = await chrome.runtime.sendMessage({ type: "GET_STATUS" });
-        if (status && status.userId) cachedMyUserId = Number(status.userId);
+        if (status && status.userId) myUserId = Number(status.userId);
       } catch (e) {}
     }
-    if (!cachedMyUserId) {
-      console.warn("[BtrKorone/Trades] Could not determine current user ID");
+    if (!myUserId) {
+      console.warn("[BtrKorone/Trades] Could not determine current user ID; aborting.");
       return;
     }
 
-    console.log("[BtrKorone/Trades] Init for user:", cachedMyUserId);
-    installFetchSpyListener();
-    injectPageSpyFallback();
-    installClickHintCapture();
-    await refreshTradeCache();
-    observeForTradeModal();
-  }
-
-  async function refreshTradeCache() {
-    if (typeof PekoraAPI === "undefined") return;
-    try {
-      // Completed trades are needed for the "View Details" modal opened from
-      // the Completed tab - inbound/outbound alone won't contain them.
-      const [inb, outb, comp] = await Promise.all([
-        PekoraAPI.getInboundTrades(),
-        PekoraAPI.getOutboundTrades(),
-        PekoraAPI.getCompletedTrades()
-      ]);
-      cachedTrades = [
-        ...((inb  && inb.data)  || []),
-        ...((outb && outb.data) || []),
-        ...((comp && comp.data) || [])
-      ];
-      console.log(
-        `[BtrKorone/Trades] Cached ${cachedTrades.length} trades ` +
-        `(inbound: ${(inb && inb.data && inb.data.length) || 0}, ` +
-        `outbound: ${(outb && outb.data && outb.data.length) || 0}, ` +
-        `completed: ${(comp && comp.data && comp.data.length) || 0})`
-      );
-    } catch (e) {
-      console.warn("[BtrKorone/Trades] Could not pre-fetch trades:", e);
-    }
+    console.log("[BtrKorone/Trades] Init for user:", myUserId);
+    installTradesPageHandlers();
   }
 
   // ============================================================
-  // MODAL DETECTION
+  // TRADES PAGE: hide native rows, inject our own
   // ============================================================
 
-  function observeForTradeModal() {
-    const observer = new MutationObserver(() => tryEnhanceVisibleModal());
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-    tryEnhanceVisibleModal();
-  }
-
-  async function tryEnhanceVisibleModal() {
-    const modal = findVisibleTradeModal();
-    if (!modal) {
-      // Modal closed - reset both keys so the next open is a fresh attempt
-      injectedTradeKey = null;
-      pendingResolveKey = null;
-      return;
-    }
-
-    const modalKey = generateModalKey(modal);
-    if (modalKey === injectedTradeKey) return;          // already injected
-    if (modalKey === pendingResolveKey) return;         // resolution in flight
-
-    if (modal.querySelector(".btrk-trade-summary-panel, .btrk-section-summary")) {
-      injectedTradeKey = modalKey;
-      return;
-    }
-
-    pendingResolveKey = modalKey;
-    try {
-      // Fast path: if the page-spy already captured the full trade detail
-      // for this modal (it almost always does, because Pekora itself just
-      // fetched it to render the modal), use it directly. No refetch, no
-      // cache lookup, no DOM scraping.
-      if (lastTradeDetail.detail && Date.now() - lastTradeDetail.ts < HINT_TTL_MS) {
-        console.log(`[BtrKorone/Trades] Using spy-cached detail for trade ${lastTradeDetail.id}`);
-        enhanceModal(modal, lastTradeDetail.detail);
-        injectedTradeKey = modalKey;
-        return;
-      }
-
-      const tradeId = await resolveTradeIdFromModal(modal);
-      if (!tradeId) {
-        // Don't stamp injectedTradeKey here - we want to retry on the next
-        // mutation event in case the cache was empty on the first attempt.
-        console.log("[BtrKorone/Trades] Modal open but couldn't resolve trade ID yet; will retry.");
-        return;
-      }
-      console.log(`[BtrKorone/Trades] Resolved trade ID: ${tradeId}`);
-
-      const detail = await PekoraAPI.getTradeDetail(tradeId);
-      if (!detail) {
-        console.warn(`[BtrKorone/Trades] getTradeDetail(${tradeId}) returned null`);
-        return;
-      }
-
-      enhanceModal(modal, detail);
-      injectedTradeKey = modalKey;                       // stamp ONLY on success
-    } finally {
-      pendingResolveKey = null;
-    }
-  }
-
-  function findVisibleTradeModal() {
-    // Strategy 1: standard modal selectors
-    const candidates = document.querySelectorAll(
-      ".modal.show, .modal.in, .modal-content, [role='dialog'], .trade-modal, .modal-dialog"
-    );
-    for (const el of candidates) {
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) continue;
-      const text = (el.textContent || "").toLowerCase();
-      if (text.includes("trade request") ||
-          text.includes("items you will give") ||
-          text.includes("items you will receive") ||
-          text.includes("items you gave") ||
-          text.includes("items you received")) {
-        return el.closest(".modal-content") || el.closest(".modal") || el;
-      }
-    }
-
-    // Strategy 2: fallback - Pekora may use a custom (non-Bootstrap) modal.
-    // Walk up from any visible "items you will give/gave" heading until we
-    // find a container that ALSO holds the receive heading.
-    const giveHeading =
-      findElementContainingText("items you will give") ||
-      findElementContainingText("items you gave");
-    if (giveHeading) {
-      let el = giveHeading;
-      for (let i = 0; i < 12 && el && el.parentElement; i++) {
-        const t = (el.textContent || "").toLowerCase();
-        const rect = el.getBoundingClientRect();
-        if (rect.width >= 280 &&
-            (t.includes("items you will receive") || t.includes("items you received"))) {
-          return el;
+  function installTradesPageHandlers() {
+    // Pekora's CSS modules use hashed class names like `tradeTypeActions-0-2-50`
+    // and `table-0-2-51`. The hashes change as Pekora redeploys, so we match
+    // permissively on the prefix.
+    waitFor(
+      "select[class*='tradeTypeActions-']",
+      (select) => waitFor(
+        "table[class*='table-'] tbody",
+        (tbody) => {
+          select.addEventListener("change", () => loadTrades(select.value, tbody));
+          loadTrades(select.value, tbody);
         }
-        el = el.parentElement;
-      }
-    }
+      )
+    );
 
-    return null;
+    // Capture-phase click intercept for our custom View Details button. Has to
+    // run BEFORE Pekora's own handler so we can stopImmediatePropagation and
+    // keep the native modal from opening alongside ours.
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest(".tm-view-btn");
+      if (!btn) return;
+      const row = btn.closest("tr.tm-injected");
+      if (!row || !row._tmTrade) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      openModal(row._tmTrade);
+    }, /* capture = */ true);
   }
 
   /**
-   * Walk text nodes to find the element whose text contains a phrase.
-   * Returns the smallest matching parent element, not the document body.
+   * Resolve a selector now or wait for it to appear via MutationObserver.
+   * The Pekora trades page is server-rendered, but ASP.NET can still defer
+   * the table render briefly on slow loads.
    */
-  function findElementContainingText(phrase) {
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let node;
-    while ((node = walker.nextNode())) {
-      const t = (node.textContent || "").toLowerCase();
-      if (t.length < 200 && t.includes(phrase)) {
-        return node.parentElement;
+  function waitFor(selector, callback) {
+    const el = document.querySelector(selector);
+    if (el) return callback(el);
+    const observer = new MutationObserver(() => {
+      const found = document.querySelector(selector);
+      if (found) {
+        observer.disconnect();
+        callback(found);
       }
-    }
-    return null;
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  function generateModalKey(modal) {
-    const names = [...modal.querySelectorAll("a, .item-name, .text-truncate")]
-      .map(el => el.textContent.trim())
-      .filter(s => s.length > 2 && s.length < 80)
-      .join("|");
-    return names.substring(0, 200);
-  }
+  async function loadTrades(type, tbody) {
+    clearInjected(tbody);
 
-  async function resolveTradeIdFromModal(modal) {
-    // 1. Click hint - the most reliable signal. The user just clicked a
-    //    "View Details" element that almost always carries the trade ID.
-    if (lastTradeHint.id && Date.now() - lastTradeHint.ts < HINT_TTL_MS) {
-      console.log(`[BtrKorone/Trades] Resolve via click hint: ${lastTradeHint.id}`);
-      return lastTradeHint.id;
+    const loading = document.createElement("tr");
+    loading.className = "tm-loading-row";
+    loading.innerHTML = `<td colspan="5" style="text-align:center;padding:10px;color:#888">Loading ${escapeHtml(type)} trades…</td>`;
+    tbody.appendChild(loading);
+
+    let trades;
+    try {
+      trades = await fetchAllTrades(type);
+    } catch (e) {
+      loading.innerHTML = `<td colspan="5" style="text-align:center;padding:10px;color:#f87171">Failed to load: ${escapeHtml(e.message)}</td>`;
+      return;
     }
+    loading.remove();
 
-    // 2. Explicit data attributes on or inside the modal
-    const dataEl = modal.querySelector("[data-trade-id], [data-tradeid], [data-id]");
-    if (dataEl) {
-      const id =
-        dataEl.dataset.tradeId ||
-        dataEl.dataset.tradeid ||
-        dataEl.dataset.id;
-      if (id && /^\d{4,10}$/.test(id)) {
-        console.log(`[BtrKorone/Trades] Resolve via data-attr: ${id}`);
-        return id;
-      }
-    }
-
-    // 3. Regex over the modal HTML for trade-id shaped substrings
-    const html = modal.innerHTML || "";
-    const regexes = [
-      /(?:tradeid|trade[_-]?id|data-trade|data-id)\s*[="':\s]+(\d{4,10})/i,
-      /[?&](?:id|tradeid|trade)=(\d{4,10})/i,
-      /\/trades?\/(\d{4,10})/i
-    ];
-    for (const rx of regexes) {
-      const m = html.match(rx);
-      if (m) {
-        console.log(`[BtrKorone/Trades] Resolve via HTML regex: ${m[1]}`);
-        return m[1];
-      }
-    }
-
-    // 4. Partner-name fallback - look up the trade in cache by partner name
-    const partnerName = extractPartnerName(modal);
-    console.log(`[BtrKorone/Trades] Extracted partner name: ${partnerName ? `"${partnerName}"` : "(none)"}`);
-    if (partnerName) {
-      let match = findCachedTradeByPartner(partnerName);
-      if (!match) {
-        // Refresh cache once and retry - the trade may be newer than our snapshot
-        console.log("[BtrKorone/Trades] No cache hit; refreshing cache and retrying.");
-        await refreshTradeCache();
-        match = findCachedTradeByPartner(partnerName);
-      }
-      if (match) {
-        console.log(`[BtrKorone/Trades] Resolve via cache-lookup: ${match.id}`);
-        return String(match.id);
-      }
-      // Help the user (and us) see why the lookup missed
-      const sample = cachedTrades.slice(0, 6)
-        .map(t => extractAnyName(t) || "?")
-        .join(", ");
-      console.log(`[BtrKorone/Trades] Cache miss for "${partnerName}". Sample of cached partner names: [${sample}]`);
-    }
-
-    return null;
-  }
-
-  /**
-   * Look up a cached trade by partner name. The list endpoint's user-field
-   * shape is inconsistent across inbound/outbound/completed, so we check
-   * every user-shaped slot we can find on each trade row.
-   */
-  function findCachedTradeByPartner(partnerName) {
-    const target = partnerName.toLowerCase();
-    return cachedTrades.find(t => {
-      const candidates = collectUserNames(t);
-      return candidates.some(n => n && n.toLowerCase() === target);
-    }) || null;
-  }
-
-  function collectUserNames(t) {
-    const out = [];
-    if (!t) return out;
-    const userish = [t.user, t.partner, t.sender, t.recipient, t.from, t.to];
-    if (Array.isArray(t.offers)) {
-      for (const o of t.offers) {
-        if (o && o.user) userish.push(o.user);
-      }
-    }
-    for (const u of userish) {
-      if (u && typeof u === "object") {
-        if (u.name) out.push(String(u.name));
-        if (u.username) out.push(String(u.username));
-        if (u.displayName) out.push(String(u.displayName));
-      }
-    }
-    return out;
-  }
-
-  function extractAnyName(t) {
-    return collectUserNames(t)[0] || null;
-  }
-
-  function extractPartnerName(modal) {
-    const text = modal.textContent || "";
-    const m = text.match(/Trade with\s+([A-Za-z0-9_]+)/i);
-    if (m) return m[1];
-
-    const profileLink = modal.querySelector("a[href*='/users/']");
-    if (profileLink) {
-      const name = (profileLink.textContent || "").trim();
-      if (name) return name;
-    }
-    return null;
-  }
-
-  // ============================================================
-  // MAIN ENHANCEMENT
-  // ============================================================
-
-  function enhanceModal(modal, tradeDetail) {
-    const { myOffer, theirOffer } = PekoraAPI.splitTradeOffers(tradeDetail, cachedMyUserId);
-    const myCalc    = PekoraAPI.calculateOfferValue(myOffer    ? myOffer.userAssets    : []);
-    const theirCalc = PekoraAPI.calculateOfferValue(theirOffer ? theirOffer.userAssets : []);
-
-    // Minimal mode: don't touch Pekora's modal DOM at all - just append a
-    // single self-contained verdict panel. Safe by construction.
-    if (MINIMAL_MODE) {
-      injectFallbackPanel(modal, myCalc, theirCalc);
+    if (trades.length === 0) {
+      const empty = document.createElement("tr");
+      empty.className = "tm-loading-row";
+      empty.innerHTML = `<td colspan="5" style="text-align:center;padding:10px;color:#888">No ${escapeHtml(type)} trades</td>`;
+      tbody.appendChild(empty);
       return;
     }
 
-    const sections = findSectionHeadings(modal);
-    if (!sections.give && !sections.receive) {
-      console.warn("[BtrKorone/Trades] Could not locate give/receive headings; falling back to bottom panel.");
-      injectFallbackPanel(modal, myCalc, theirCalc);
-      return;
-    }
-
-    // 1. Per-card badges
-    if (sections.give) {
-      badgeItemsBetween(modal, sections.give, sections.receive, myCalc.items);
-    }
-    if (sections.receive) {
-      badgeItemsBetween(modal, sections.receive, null, theirCalc.items);
-    }
-
-    // 2. Per-section summary rows
-    if (sections.give)    injectSectionSummary(sections.give,    myCalc,    "give");
-    if (sections.receive) injectSectionSummary(sections.receive, theirCalc, "receive");
-
-    // 3. Net change between sections
-    if (sections.give && sections.receive) {
-      injectNetChange(sections.receive, myCalc, theirCalc);
-    }
-  }
-
-  // ============================================================
-  // SECTION & CARD DETECTION
-  // ============================================================
-
-  function findSectionHeadings(modal) {
-    // Pending trades use future tense ("Items you will give/receive"),
-    // completed trades use past tense ("Items you gave/received").
-    // Match both.
-    const walker = document.createTreeWalker(modal, NodeFilter.SHOW_TEXT);
-    let give = null, receive = null;
-    let node;
-    while ((node = walker.nextNode())) {
-      const t = (node.textContent || "").toLowerCase().trim();
-      if (!t) continue;
-      if (!give    && /^items you (will give|gave)\b/.test(t))      give    = node.parentElement;
-      else if (!receive && /^items you (will receive|received)\b/.test(t)) receive = node.parentElement;
-      if (give && receive) break;
-    }
-    return { give, receive };
-  }
-
-  /**
-   * Find item thumbnail images that fall after `start` and before `end`
-   * (or all that fall after `start` if `end` is null).
-   * Returns an array of {img, card} pairs where card is a sensible parent
-   * to anchor a position:absolute badge to.
-   */
-  function findItemCardsBetween(modal, start, end) {
-    const imgs = Array.from(modal.querySelectorAll("img"));
-    const results = [];
-    for (const img of imgs) {
-      const src = img.getAttribute("src") || "";
-      if (!THUMB_SRC_RX.test(src)) continue;
-
-      // Position relative to the start heading
-      if (start) {
-        const pos = start.compareDocumentPosition(img);
-        if (!(pos & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
-      }
-      if (end) {
-        const pos = end.compareDocumentPosition(img);
-        if (!(pos & Node.DOCUMENT_POSITION_PRECEDING)) continue;
-      }
-
-      const card = findCardAnchor(img);
-      if (card) results.push({ img, card });
-    }
-    return results;
-  }
-
-  /**
-   * Walk up from <img> to find a sensible card anchor:
-   * a parent that visibly wraps the thumbnail (typically <a> or <div>).
-   * We stop as soon as we find an element with non-static layout potential
-   * (i.e. one we can flip to position:relative without disrupting siblings).
-   */
-  function findCardAnchor(img) {
-    let el = img.parentElement;
-    let depth = 0;
-    while (el && depth < 4) {
-      const rect = el.getBoundingClientRect();
-      // Card should be at least as big as the image but not the whole modal
-      if (rect.width >= 40 && rect.width <= 200 && rect.height >= 40 && rect.height <= 220) {
-        return el;
-      }
-      el = el.parentElement;
-      depth++;
-    }
-    return img.parentElement;
-  }
-
-  function badgeItemsBetween(modal, start, end, items) {
-    const cards = findItemCardsBetween(modal, start, end);
-    // Match cards to items in order — Pekora renders items in the same order
-    // they come from the trade API (left-to-right).
-    cards.forEach((entry, idx) => {
-      const item = items[idx];
-      if (!item) return;
-      addBadgeToCard(entry.card, item);
+    // Hide Pekora's native rows so our injected ones are the only visible
+    // ones. Done AFTER our rows are appended so the table never flashes empty.
+    trades.forEach(trade => tbody.appendChild(buildTradeRow(trade)));
+    tbody.querySelectorAll("tr:not(.tm-injected):not(.tm-loading-row)").forEach(el => {
+      el.style.display = "none";
     });
   }
 
-  function addBadgeToCard(card, item) {
-    if (card.querySelector(".btrkorone-value-badge")) return;
-    if (getComputedStyle(card).position === "static") {
-      card.style.position = "relative";
+  /**
+   * Walk the cursor pagination on /apisite/trades/v1/trades/{type}.
+   * Reuses PekoraAPI._fetchJSON so credentials + error logging are consistent.
+   */
+  async function fetchAllTrades(type) {
+    const all = [];
+    let cursor = "";
+    while (true) {
+      const url = `${TRADE_API}/${encodeURIComponent(type)}?cursor=${encodeURIComponent(cursor)}&limit=100`;
+      const data = await PekoraAPI._fetchJSON(url);
+      if (!data) break;
+      const items = data.data || [];
+      all.push(...items);
+      const next = data.nextPageCursor;
+      if (!next || items.length === 0) break;
+      cursor = next;
     }
-
-    const value = item.hasKoromonValue ? item.koromonValue : item.rap;
-    const demandColor = item.hasKoromonValue && typeof KoromonsAPI !== "undefined"
-      ? KoromonsAPI.getDemandColor(item.demand)
-      : null;
-
-    const badge = document.createElement("div");
-    badge.className = "btrkorone-value-badge" + (item.hasKoromonValue ? " btrk-valued-live" : " btrk-rap-only");
-    badge.innerHTML = `
-      <span class="btrk-badge-robux" aria-hidden="true">R$</span>
-      <span class="btrk-badge-num">${formatValue(value)}</span>
-      ${demandColor ? `<span class="btrk-demand-dot" style="background:${demandColor}"></span>` : ""}
-    `;
-    badge.title = item.hasKoromonValue
-      ? `${item.name}\nKorone Value: ${item.koromonValue.toLocaleString()}\nRAP: ${item.rap.toLocaleString()}\nDemand: ${item.demand}`
-      : `${item.name}\nRAP: ${item.rap.toLocaleString()} (no Korone value)`;
-
-    card.appendChild(badge);
-  }
-
-  // ============================================================
-  // SECTION SUMMARY ROWS
-  // ============================================================
-
-  function injectSectionSummary(headingEl, calc, side) {
-    const container = findSectionContainer(headingEl);
-    if (!container) return;
-    if (container.querySelector(`.btrk-section-summary[data-side="${side}"]`)) return;
-
-    const totalKoroneValue = calc.items.reduce(
-      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0),
-      0
-    );
-    const totalRap = calc.items.reduce((s, i) => s + i.rap, 0);
-    const demandRating = computeDemandRating(calc.items);
-    const valuedCount = calc.items.filter(i => i.hasKoromonValue).length;
-
-    const summary = document.createElement("div");
-    summary.className = "btrk-section-summary";
-    summary.dataset.side = side;
-    summary.innerHTML = `
-      <div class="btrk-section-row">
-        <span class="btrk-section-label">Korone Rolimons Value:</span>
-        <span class="btrk-section-val">
-          <span class="btrk-icon-rolimons" aria-hidden="true">R</span>
-          ${valuedCount > 0 ? formatValue(totalKoroneValue) : "&mdash;"}
-        </span>
-      </div>
-      <div class="btrk-section-row">
-        <span class="btrk-section-label">Korone Demand Rating:</span>
-        <span class="btrk-section-val">
-          <span class="btrk-icon-rolimons" aria-hidden="true">R</span>
-          ${demandRating > 0 ? `${demandRating.toFixed(1)}/5.0` : "&mdash;"}
-        </span>
-      </div>
-      <div class="btrk-section-row btrk-section-row-muted">
-        <span class="btrk-section-label">Total RAP:</span>
-        <span class="btrk-section-val">${formatValue(totalRap)}</span>
-      </div>
-    `;
-    container.appendChild(summary);
+    return all;
   }
 
   /**
-   * Walk up from a heading element until we find a container that holds
-   * both the heading and its item cards (so our summary rows sit beside
-   * Pekora's native "Value: R$ XXX" line).
+   * Tear down any rows we previously injected and un-hide the native ones.
+   * Used between type-select changes and on initial mount.
    */
-  function findSectionContainer(headingEl) {
-    let el = headingEl;
-    for (let i = 0; i < 6 && el && el.parentElement; i++) {
-      // Heuristic: container has at least one thumbnail img inside
-      const hasThumb = Array.from(el.querySelectorAll("img"))
-        .some(img => THUMB_SRC_RX.test(img.getAttribute("src") || ""));
-      if (hasThumb) return el;
-      el = el.parentElement;
+  function clearInjected(tbody) {
+    tbody.querySelectorAll(".tm-injected, .tm-loading-row").forEach(el => el.remove());
+    tbody.querySelectorAll("tr").forEach(el => {
+      // Only undo the display:none we set ourselves; don't touch rows that
+      // Pekora has hidden for its own reasons.
+      if (el.style.display === "none") el.style.display = "";
+    });
+  }
+
+  function buildTradeRow(trade) {
+    const tr = document.createElement("tr");
+    tr.className = "tm-injected";
+    tr._tmTrade = trade;
+
+    function tdBasic(text) {
+      const td = document.createElement("td");
+      td.className = "tm-td";
+      td.textContent = text;
+      return td;
     }
-    return headingEl.parentElement || headingEl;
+
+    tr.appendChild(tdBasic(formatDate(trade.created)));
+    tr.appendChild(tdBasic(formatDate(trade.expiration)));
+
+    // Partner column with avatar headshot
+    const tdPartner = document.createElement("td");
+    tdPartner.className = "tm-td";
+    const partnerWrap = document.createElement("div");
+    partnerWrap.className = "tm-partner-cell";
+    const img = document.createElement("img");
+    const partner = trade.user ? (trade.user.displayName || trade.user.name || "Unknown") : "Unknown";
+    img.alt = partner;
+    img.loading = "lazy";
+    if (trade.user && trade.user.id) {
+      fetchAvatar(trade.user.id).then(url => { if (url) img.src = url; });
+    }
+    const nameP = document.createElement("p");
+    nameP.className = "tm-partner-name";
+    nameP.textContent = partner;
+    partnerWrap.appendChild(img);
+    partnerWrap.appendChild(nameP);
+    tdPartner.appendChild(partnerWrap);
+    tr.appendChild(tdPartner);
+
+    tr.appendChild(tdBasic(trade.status || "—"));
+
+    const tdAction = document.createElement("td");
+    tdAction.className = "tm-td";
+    const btn = document.createElement("button");
+    btn.className = "tm-view-btn";
+    btn.textContent = "View Details";
+    tdAction.appendChild(btn);
+    tr.appendChild(tdAction);
+
+    return tr;
   }
 
   // ============================================================
-  // NET CHANGE INDICATOR
+  // CUSTOM MODAL
   // ============================================================
 
-  function injectNetChange(receiveHeading, myCalc, theirCalc) {
-    const myValue    = effectiveTotal(myCalc);
-    const theirValue = effectiveTotal(theirCalc);
+  async function openModal(trade) {
+    document.querySelector(".tm-modal-bg")?.remove();
 
-    const diff = theirValue - myValue;
-    const pct = myValue > 0 ? (diff / myValue) * 100 : 0;
+    const tradeStatus = (trade.status || "").toLowerCase();
+    const tradeType = (trade.tradeType || "").toLowerCase();
+    const isInbound = tradeType === "inbound" || tradeStatus === "open" || tradeStatus === "countered";
 
-    // Filled triangles read more cleanly than line arrows at small sizes
-    // and match the RoPro reference UI.
-    let cls = "btrk-net-even", arrow = "\u25B6", sign = "";   // ▶ for even
-    if (diff > 0)      { cls = "btrk-net-profit"; arrow = "\u25B2"; sign = "+"; } // ▲
-    else if (diff < 0) { cls = "btrk-net-loss";   arrow = "\u25BC"; sign = "";  } // ▼ (formatValue handles minus)
+    // ----- Build modal skeleton -----
+    const bg = document.createElement("div");
+    bg.className = "tm-modal-bg";
 
-    const indicator = document.createElement("div");
-    indicator.className = `btrk-net-change ${cls}`;
-    indicator.innerHTML = `
-      <span class="btrk-net-inner">
-        <span class="btrk-net-arrow">${arrow}</span>
-        <span class="btrk-net-value">${sign}${formatValue(diff)}</span>
-        <span class="btrk-net-pct">(${sign}${pct.toFixed(0)}%)</span>
-      </span>
-    `;
-    indicator.title = `You give ${formatValue(myValue)} \u2022 You receive ${formatValue(theirValue)}`;
+    const modal = document.createElement("div");
+    modal.className = "tm-modal";
 
-    // Place the indicator immediately before the "Items you will receive" section
-    const receiveContainer = findSectionContainer(receiveHeading);
-    if (receiveContainer && receiveContainer.parentNode) {
-      receiveContainer.parentNode.insertBefore(indicator, receiveContainer);
-    } else if (receiveHeading.parentNode) {
-      receiveHeading.parentNode.insertBefore(indicator, receiveHeading);
+    const titleEl = document.createElement("div");
+    titleEl.className = "tm-modal-title";
+    titleEl.textContent = "Trade Request";
+    modal.appendChild(titleEl);
+
+    const closeEl = document.createElement("div");
+    closeEl.className = "tm-modal-close";
+    closeEl.textContent = "✕";
+    modal.appendChild(closeEl);
+
+    const body = document.createElement("div");
+    body.className = "tm-modal-body";
+
+    const sidebar = document.createElement("div");
+    sidebar.className = "tm-sidebar";
+    sidebar.innerHTML = `<div class="tm-sidebar-loading">Loading…</div>`;
+
+    const content = document.createElement("div");
+    content.className = "tm-content";
+    content.innerHTML = `<div class="tm-content-loading">Loading trade details…</div>`;
+
+    body.appendChild(sidebar);
+    body.appendChild(content);
+    modal.appendChild(body);
+
+    // ----- Footer (action buttons depend on whether this is inbound) -----
+    const footer = document.createElement("div");
+    footer.className = "tm-modal-footer";
+
+    if (isInbound) {
+      const acceptBtn = mkBtn("Accept", "tm-btn-accept");
+      const counterBtn = mkBtn("Counter", "tm-btn-counter");
+      const declineBtn = mkBtn("Decline", "tm-btn-decline");
+      const allBtns = [acceptBtn, counterBtn, declineBtn];
+      const disableAll = () => allBtns.forEach(b => { b.disabled = true; });
+      const reEnableAll = () => allBtns.forEach(b => { b.disabled = false; });
+
+      acceptBtn.addEventListener("click", () => {
+        disableAll();
+        acceptBtn.textContent = "…";
+        tradeAction(trade.id, "accept")
+          .then(() => {
+            acceptBtn.textContent = "✓ Accepted";
+            setTimeout(() => { bg.remove(); location.reload(); }, 900);
+          })
+          .catch(err => {
+            reEnableAll();
+            acceptBtn.textContent = "Accept";
+            alert("Accept failed: " + err.message);
+          });
+      });
+
+      declineBtn.addEventListener("click", () => {
+        disableAll();
+        declineBtn.textContent = "…";
+        tradeAction(trade.id, "decline")
+          .then(() => {
+            declineBtn.textContent = "✓ Declined";
+            setTimeout(() => { bg.remove(); location.reload(); }, 900);
+          })
+          .catch(err => {
+            reEnableAll();
+            declineBtn.textContent = "Decline";
+            alert("Decline failed: " + err.message);
+          });
+      });
+
+      // Counter just opens Pekora's native trade-window page in a popup -
+      // building a counter-trade UI from scratch is out of scope here.
+      counterBtn.addEventListener("click", () => {
+        const pid = trade.user ? trade.user.id : "";
+        const url = `${BASE}/Trade/TradeWindow.aspx?TradeSessionId=${trade.id}&TradePartnerID=${pid}`;
+        window.open(url, "_blank", "popup,width=900,height=700,scrollbars=yes,resizable=yes");
+      });
+
+      footer.appendChild(acceptBtn);
+      footer.appendChild(counterBtn);
+      footer.appendChild(declineBtn);
+    } else {
+      const okBtn = mkBtn("OK", "tm-btn-ok");
+      okBtn.addEventListener("click", () => bg.remove());
+      footer.appendChild(okBtn);
+    }
+    modal.appendChild(footer);
+
+    bg.appendChild(modal);
+    document.body.appendChild(bg);
+
+    // ----- Close handlers -----
+    const closeModal = () => bg.remove();
+    closeEl.addEventListener("click", closeModal);
+    bg.addEventListener("click", e => { if (e.target === bg) closeModal(); });
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        closeModal();
+        document.removeEventListener("keydown", onKey);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+
+    // ----- Fetch full detail and render -----
+    try {
+      const detail = await PekoraAPI.getTradeDetail(trade.id);
+      if (!detail) throw new Error("Could not fetch trade detail");
+
+      const { myOffer, theirOffer } = PekoraAPI.splitTradeOffers(detail, myUserId);
+      const myAssets = (myOffer && myOffer.userAssets) || [];
+      const theirAssets = (theirOffer && theirOffer.userAssets) || [];
+      const partner = (theirOffer && theirOffer.user) || trade.user || {};
+      const partnerName = partner.displayName || partner.name || "Unknown";
+      const partnerId = partner.id;
+
+      const myCalc = PekoraAPI.calculateOfferValue(myAssets);
+      const theirCalc = PekoraAPI.calculateOfferValue(theirAssets);
+
+      // The score field in calc.totalValue falls back to RAP when an item
+      // isn't in the Koromons catalog, so it's the right number for the
+      // headline diff (best-available worth on each side). For displaying
+      // the per-side "K" totals we only sum items that ACTUALLY have a
+      // Koromons value - otherwise an RAP-only side would lie about having
+      // a community value of N.
+      const myKolTotal     = myCalc.items.filter(i => i.hasKoromonValue)
+                                         .reduce((s, i) => s + i.koromonValue, 0);
+      const theirKolTotal  = theirCalc.items.filter(i => i.hasKoromonValue)
+                                            .reduce((s, i) => s + i.koromonValue, 0);
+      const myValuedCount    = myCalc.items.filter(i => i.hasKoromonValue).length;
+      const theirValuedCount = theirCalc.items.filter(i => i.hasKoromonValue).length;
+      const anyValued = myValuedCount > 0 || theirValuedCount > 0;
+
+      const myValue = myCalc.totalValue;
+      const theirValue = theirCalc.totalValue;
+      const myRap = myCalc.totalRap;
+      const theirRap = theirCalc.totalRap;
+      // Pekora's offer object exposes robux as either `robuxAmount` or `robux`
+      // depending on the endpoint. Read both to be safe.
+      const myRobux = (myOffer && (myOffer.robuxAmount || myOffer.robux)) || 0;
+      const theirRobux = (theirOffer && (theirOffer.robuxAmount || theirOffer.robux)) || 0;
+
+      const valDiff = theirValue - myValue;
+
+      // Fetch avatar + asset thumbs in parallel - both block the final paint
+      // anyway, so we want them done at the same time.
+      const allAssetIds = [...myAssets, ...theirAssets].map(a => a.assetId).filter(Boolean);
+      const [avatarUrl, thumbMap] = await Promise.all([
+        partnerId ? fetchAvatar(partnerId) : Promise.resolve(""),
+        fetchAssetThumbnails(allAssetIds)
+      ]);
+
+      // ----- Render sidebar + content -----
+      renderSidebar(sidebar, {
+        avatarUrl, partnerName, partnerId, isInbound,
+        tradeStatus: detail.status,
+        valDiff, anyValued,
+        myKolTotal, myValuedCount, myRap, myRobux,
+        theirKolTotal, theirValuedCount, theirRap, theirRobux
+      });
+
+      content.innerHTML = "";
+      content.appendChild(renderSection(
+        "Items you will give",
+        myCalc.items, myAssets, thumbMap,
+        myKolTotal, myRap, myValuedCount, myRobux
+      ));
+
+      const hr = document.createElement("hr");
+      hr.className = "tm-divider";
+      content.appendChild(hr);
+
+      content.appendChild(renderSection(
+        "Items you will receive",
+        theirCalc.items, theirAssets, thumbMap,
+        theirKolTotal, theirRap, theirValuedCount, theirRobux
+      ));
+
+    } catch (e) {
+      sidebar.innerHTML = "";
+      content.innerHTML = `<div class="tm-error">Error: ${escapeHtml(e.message)}</div>`;
     }
   }
 
-  function effectiveTotal(calc) {
-    // Use Korone value when available, otherwise RAP
-    return calc.items.reduce(
-      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : i.rap),
-      0
-    );
+  function mkBtn(text, cls) {
+    const b = document.createElement("button");
+    b.className = cls;
+    b.textContent = text;
+    return b;
   }
 
-  // ============================================================
-  // FALLBACK (modal layout couldn't be parsed)
-  // ============================================================
+  function renderSidebar(sidebar, opts) {
+    sidebar.innerHTML = "";
 
-  function injectFallbackPanel(modal, myCalc, theirCalc) {
-    if (modal.querySelector(".btrk-trade-summary-panel")) return;
+    const av = document.createElement("img");
+    av.className = "tm-avatar";
+    av.alt = opts.partnerName;
+    if (opts.avatarUrl) av.src = opts.avatarUrl;
+    sidebar.appendChild(av);
 
-    const myValue    = effectiveTotal(myCalc);
-    const theirValue = effectiveTotal(theirCalc);
-    const diff = theirValue - myValue;
-    const pct = myValue > 0 ? ((diff / myValue) * 100).toFixed(1) : 0;
+    const status = document.createElement("div");
+    status.className = "tm-trade-status";
+    const partnerLink = document.createElement("a");
+    partnerLink.className = "tm-partner-link";
+    partnerLink.href = `/users/${opts.partnerId || ""}/profile`;
+    partnerLink.textContent = opts.partnerName;
+    status.appendChild(partnerLink);
+    status.appendChild(document.createTextNode(
+      opts.isInbound
+        ? " sent you a trade!"
+        : ` — trade ${opts.tradeStatus || ""}`
+    ));
+    sidebar.appendChild(status);
 
-    let verdictClass = "btrk-verdict-even", arrow = "\u25B6";
-    if (diff > 0)      { verdictClass = "btrk-verdict-profit"; arrow = "\u25B2"; }
-    else if (diff < 0) { verdictClass = "btrk-verdict-loss";   arrow = "\u25BC"; }
+    // Big colored value-diff headline (RoPro-style). Label says "Value"
+    // when at least one item on either side has a community Koromons value;
+    // otherwise this is a pure RAP comparison and we say so.
+    const diffCls = opts.valDiff > 0 ? "pos" : opts.valDiff < 0 ? "neg" : "neu";
+    const diffStr = (opts.valDiff >= 0 ? "+" : "") + opts.valDiff.toLocaleString();
+    const diffLbl = opts.anyValued ? "Value" : "RAP";
+    const diffEl = document.createElement("div");
+    diffEl.className = `tm-diff ${diffCls}`;
+    diffEl.textContent = `${diffStr} ${diffLbl}`;
+    sidebar.appendChild(diffEl);
 
-    const allItems = [...myCalc.items, ...theirCalc.items];
-    const demandRating = computeDemandRating(allItems);
+    sidebar.appendChild(sideLbl("You're offering:"));
+    // K row only renders when at least one item is in the Koromons catalog -
+    // otherwise we'd be making up a "value" that doesn't exist.
+    if (opts.myValuedCount > 0) sidebar.appendChild(sideValRow("kol", opts.myKolTotal));
+    sidebar.appendChild(sideValRow("rap", opts.myRap));
+    if (opts.myRobux) sidebar.appendChild(sideValRow("robux", opts.myRobux));
 
-    // Sums of Koromons-known values per side (separate from RAP fallback total)
-    const myKoroneVal = myCalc.items.reduce(
-      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0), 0);
-    const theirKoroneVal = theirCalc.items.reduce(
-      (s, i) => s + (i.hasKoromonValue ? i.koromonValue : 0), 0);
-    const anyValued = (myKoroneVal + theirKoroneVal) > 0;
+    sidebar.appendChild(sideLbl("They're offering:"));
+    if (opts.theirValuedCount > 0) sidebar.appendChild(sideValRow("kol", opts.theirKolTotal));
+    sidebar.appendChild(sideValRow("rap", opts.theirRap));
+    if (opts.theirRobux) sidebar.appendChild(sideValRow("robux", opts.theirRobux));
+  }
 
-    const panel = document.createElement("div");
-    panel.className = "btrk-trade-summary-panel";
-    panel.innerHTML = `
-      <div class="btrk-summary-header">
-        <img src="${chrome.runtime.getURL('icons/icon32.png')}" class="btrk-summary-logo">
-        <span>BtrKorone Trade Analysis</span>
-      </div>
-      <div class="btrk-summary-grid">
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Your Total Value</span>
-          <span class="btrk-summary-val">${formatValue(myValue)}</span>
-        </div>
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Their Total Value</span>
-          <span class="btrk-summary-val">${formatValue(theirValue)}</span>
-        </div>
-        ${anyValued ? `
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Korone Rolimons Value (yours)</span>
-          <span class="btrk-summary-val">${formatValue(myKoroneVal)}</span>
-        </div>
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Korone Rolimons Value (theirs)</span>
-          <span class="btrk-summary-val">${formatValue(theirKoroneVal)}</span>
-        </div>` : ""}
-        <div class="btrk-summary-row">
-          <span class="btrk-summary-label">Korone Demand Rating</span>
-          <span class="btrk-summary-val">${demandRating > 0 ? demandRating.toFixed(1) + "/5.0" : "Unknown"}</span>
-        </div>
-      </div>
-      <div class="btrk-summary-verdict ${verdictClass}">
-        <span class="btrk-verdict-arrow">${arrow}</span>
-        <span class="btrk-verdict-amount">${diff >= 0 ? "+" : ""}${formatValue(diff)}</span>
-        <span class="btrk-verdict-pct">(${pct}%)</span>
-      </div>
-    `;
+  function sideLbl(text) {
+    const d = document.createElement("div");
+    d.className = "tm-sidebar-lbl";
+    d.textContent = text;
+    return d;
+  }
 
-    insertPanelIntoModal(modal, panel);
+  function sideValRow(type, val) {
+    const row = document.createElement("div");
+    row.className = `tm-sidebar-valrow ${type}`;
+    row.appendChild(valIcon(type));
+    const sp = document.createElement("span");
+    sp.textContent = val.toLocaleString();
+    row.appendChild(sp);
+    return row;
   }
 
   /**
-   * Append our verdict panel inside the modal in the safest possible spot:
-   * 1. Just before any element holding Accept/Counter/Decline buttons
-   * 2. Otherwise at the end of the modal-body
-   * 3. Otherwise at the end of the modal itself
-   * In every case the panel is APPENDED, never inserted between item cards,
-   * so it can't break Pekora's grid/flex layout.
+   * The three coin-style value icons used throughout the modal:
+   *   - "kol":   amber K (Koromons community value)
+   *   - "rap":   green R$ (recent average price)
+   *   - "robux": green R$ (raw robux in the trade) - same color as RAP since
+   *              they're both denominated in robux semantically.
    */
-  function insertPanelIntoModal(modal, panel) {
-    // Strategy A: find a button row by looking for the Accept button text.
-    const buttons = modal.querySelectorAll("button, input[type='button'], input[type='submit'], a.button");
-    for (const btn of buttons) {
-      const t = (btn.textContent || btn.value || "").trim().toLowerCase();
-      if (t === "accept" || t === "counter" || t === "decline") {
-        // Walk up to a row container (with another button alongside it)
-        let row = btn.parentElement;
-        for (let i = 0; i < 4 && row && row.parentElement; i++) {
-          if (row.querySelectorAll("button, input[type='button']").length >= 2) {
-            row.parentElement.insertBefore(panel, row);
-            return;
-          }
-          row = row.parentElement;
-        }
-        break; // fall through to next strategy
+  function valIcon(type) {
+    const ic = document.createElement("span");
+    ic.className = `tm-val-icon ${type}`;
+    ic.textContent = type === "kol" ? "K" : "R$";
+    ic.setAttribute("aria-hidden", "true");
+    return ic;
+  }
+
+  function renderSection(label, calcItems, rawAssets, thumbMap, kolTotal, rapTotal, valuedCount, robuxAmt) {
+    const sec = document.createElement("div");
+    sec.className = "tm-section";
+
+    const lbl = document.createElement("div");
+    lbl.className = "tm-section-label";
+    lbl.textContent = label;
+    sec.appendChild(lbl);
+
+    const grid = document.createElement("div");
+    grid.className = "tm-item-grid";
+
+    // Render up to 5 slots (Pekora's native UI cap). If a side is empty,
+    // we still want the grid to take space so the layout is balanced.
+    const count = Math.min(rawAssets.length, 5);
+    if (count === 0) {
+      const empty = document.createElement("div");
+      empty.className = "tm-slot-empty-msg";
+      empty.textContent = "Nothing offered";
+      grid.appendChild(empty);
+    } else {
+      for (let i = 0; i < count; i++) {
+        grid.appendChild(buildSlot(rawAssets[i], calcItems[i], thumbMap));
       }
     }
 
-    // Strategy B: standard modal selectors
-    const actionsRow = modal.querySelector(".modal-footer, .btn-group, .text-center");
-    if (actionsRow && actionsRow.parentNode) {
-      actionsRow.parentNode.insertBefore(panel, actionsRow);
-      return;
+    sec.appendChild(grid);
+
+    // Per-section totals. We always show RAP because every Pekora item has
+    // one. The Koromons "Value" total only appears when at least one item
+    // on this side is in the catalog - we don't want to claim a community
+    // value that doesn't exist for RAP-only items.
+    const tot = document.createElement("div");
+    tot.className = "tm-section-total";
+    const totLbl = document.createElement("span");
+    totLbl.className = "tm-section-total-label";
+    totLbl.textContent = valuedCount > 0 ? "Total Value:" : "Total RAP:";
+    const totVals = document.createElement("div");
+    totVals.className = "tm-section-total-vals";
+
+    if (valuedCount > 0) {
+      const tKol = document.createElement("div");
+      tKol.className = "tm-section-total-kol";
+      tKol.appendChild(valIcon("kol"));
+      const tKolN = document.createElement("span");
+      tKolN.textContent = kolTotal.toLocaleString();
+      tKol.appendChild(tKolN);
+      totVals.appendChild(tKol);
     }
 
-    // Strategy C: just append to the modal body / modal
-    const modalBody = modal.querySelector(".modal-body") || modal;
-    modalBody.appendChild(panel);
+    const tRap = document.createElement("div");
+    tRap.className = "tm-section-total-rap";
+    tRap.appendChild(valIcon("rap"));
+    const tRapN = document.createElement("span");
+    tRapN.textContent = rapTotal.toLocaleString();
+    tRap.appendChild(tRapN);
+    totVals.appendChild(tRap);
+
+    tot.appendChild(totLbl);
+    tot.appendChild(totVals);
+    sec.appendChild(tot);
+
+    if (robuxAmt) {
+      const robuxRow = document.createElement("div");
+      robuxRow.className = "tm-section-robux";
+      const lbl2 = document.createElement("span");
+      lbl2.textContent = "Robux Offered:";
+      const right = document.createElement("div");
+      right.appendChild(valIcon("robux"));
+      const n = document.createElement("span");
+      n.textContent = robuxAmt.toLocaleString();
+      right.appendChild(n);
+      robuxRow.appendChild(lbl2);
+      robuxRow.appendChild(right);
+      sec.appendChild(robuxRow);
+    }
+
+    return sec;
+  }
+
+  function buildSlot(rawAsset, calcItem, thumbMap) {
+    const slot = document.createElement("div");
+    slot.className = "tm-slot";
+
+    const imgWrap = document.createElement("div");
+    imgWrap.className = "tm-slot-img-wrap";
+    const img = document.createElement("img");
+    img.alt = rawAsset.name || "";
+    img.loading = "lazy";
+    const thumb = thumbMap[rawAsset.assetId];
+    if (thumb) img.src = absUrl(thumb);
+    imgWrap.appendChild(img);
+
+    // Serial overlay (limited / unique) takes priority; otherwise show UAID.
+    if (rawAsset.serialNumber) {
+      const serial = document.createElement("span");
+      serial.className = "tm-slot-serial";
+      serial.textContent = "#" + rawAsset.serialNumber;
+      imgWrap.appendChild(serial);
+    } else if (rawAsset.id || rawAsset.userAssetId) {
+      const uaid = document.createElement("span");
+      uaid.className = "tm-slot-uaid";
+      uaid.textContent = "UAID: " + (rawAsset.id || rawAsset.userAssetId);
+      imgWrap.appendChild(uaid);
+    }
+    slot.appendChild(imgWrap);
+
+    // Item name links to the catalog page so the user can click through.
+    const slug = (rawAsset.name || "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const nameDiv = document.createElement("div");
+    nameDiv.className = "tm-slot-name";
+    const nameA = document.createElement("a");
+    nameA.href = `/catalog/${rawAsset.assetId}/${slug}`;
+    nameA.textContent = rawAsset.name || "?";
+    nameA.title = rawAsset.name || "";
+    nameDiv.appendChild(nameA);
+    slot.appendChild(nameDiv);
+
+    // Korone Value row only renders when this item is actually in the
+    // koromons.com catalog. RAP is shown for every item.
+    const rap = rawAsset.recentAveragePrice || 0;
+
+    if (calcItem && calcItem.hasKoromonValue) {
+      const kolRow = document.createElement("div");
+      kolRow.className = "tm-slot-val-row kol";
+      kolRow.appendChild(valIcon("kol"));
+      const kolN = document.createElement("span");
+      kolN.textContent = calcItem.koromonValue.toLocaleString();
+      kolRow.appendChild(kolN);
+      slot.appendChild(kolRow);
+    }
+
+    const rapRow = document.createElement("div");
+    rapRow.className = "tm-slot-val-row rap";
+    rapRow.appendChild(valIcon("rap"));
+    const rapN = document.createElement("span");
+    rapN.textContent = rap.toLocaleString();
+    rapRow.appendChild(rapN);
+    slot.appendChild(rapRow);
+
+    return slot;
   }
 
   // ============================================================
-  // HELPERS
+  // API HELPERS (CSRF-aware POST + thumbnails)
   // ============================================================
 
-  function computeDemandRating(items) {
-    const valid = items.filter(i => i.hasKoromonValue && DEMAND_RATING[i.demand]);
-    if (valid.length === 0) return 0;
-    const sum = valid.reduce((s, i) => s + DEMAND_RATING[i.demand], 0);
-    return sum / valid.length;
+  function getCsrfFromCookie() {
+    const m = document.cookie.match(/rbxcsrf4=([^;]+)/);
+    return m ? m[1] : "";
   }
 
-  function formatValue(val) {
-    const num = Math.abs(val);
-    const sign = val < 0 ? "-" : "";
-    if (num >= 1_000_000) return sign + (num / 1_000_000).toFixed(1) + "M";
-    if (num >= 10_000)    return sign + (num / 1_000).toFixed(1) + "K";
-    return sign + Math.round(num).toLocaleString();
+  /**
+   * POST against Pekora's API, automatically refreshing the CSRF token from
+   * the 403 response header and retrying once. Mirrors what Pekora's own
+   * Roblox-derived clients do.
+   */
+  async function tApiPost(url) {
+    if (!csrfToken) csrfToken = getCsrfFromCookie();
+
+    const tryPost = async (token) => {
+      const headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      };
+      if (token) headers["x-csrf-token"] = token;
+      return fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: "{}"
+      });
+    };
+
+    let resp = await tryPost(csrfToken);
+    if (resp.status === 403) {
+      const newToken = resp.headers.get("x-csrf-token");
+      if (newToken && newToken !== csrfToken) {
+        csrfToken = newToken;
+        resp = await tryPost(csrfToken);
+      }
+    }
+    if (!resp.ok) {
+      // Try to surface Pekora's structured error message instead of "HTTP 400".
+      let msg = "HTTP " + resp.status;
+      try {
+        const j = await resp.json();
+        if (j.errors && j.errors[0] && j.errors[0].message) msg = j.errors[0].message;
+      } catch {}
+      throw new Error(msg);
+    }
+    return resp;
+  }
+
+  function tradeAction(tradeId, action) {
+    return tApiPost(`${TRADE_API}/${tradeId}/${action}`);
+  }
+
+  async function fetchAvatar(userId) {
+    try {
+      const r = await fetch(
+        `${THUMB_API}/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png`,
+        { credentials: "include" }
+      );
+      if (!r.ok) return "";
+      const j = await r.json();
+      const url = j.data?.[0]?.imageUrl;
+      return url ? absUrl(url) : "";
+    } catch { return ""; }
+  }
+
+  /**
+   * Batch-fetch asset thumbnails. Pekora's endpoint accepts a comma-separated
+   * list of asset IDs, so we get every item in one round-trip.
+   */
+  async function fetchAssetThumbnails(assetIds) {
+    if (!assetIds.length) return {};
+    try {
+      const r = await fetch(
+        `${THUMB_API}/assets?assetIds=${assetIds.join(",")}&size=110x110&format=Png`,
+        { credentials: "include" }
+      );
+      if (!r.ok) return {};
+      const j = await r.json();
+      const map = {};
+      for (const item of (j.data || [])) {
+        if (item.imageUrl) map[item.targetId] = item.imageUrl;
+      }
+      return map;
+    } catch { return {}; }
+  }
+
+  // ============================================================
+  // FORMATTING HELPERS
+  // ============================================================
+
+  function formatDate(s) {
+    if (!s) return "—";
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return "—";
+    return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function absUrl(url) {
+    if (!url) return "";
+    return url.startsWith("http") ? url : BASE + url;
   }
 })();
