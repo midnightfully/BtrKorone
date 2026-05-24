@@ -21,7 +21,9 @@
   "use strict";
 
   const TRADE_PAGES = ["/My/Trades.aspx", "/My/Trades", "/trades"];
-  const THUMB_SRC_RX = /\/(images\/thumbnails|thumbnails)\//i;
+  // Pekora serves item thumbs from several paths. Match permissively then let
+  // findCardAnchor's size heuristic filter out non-item images (avatars, etc).
+  const THUMB_SRC_RX = /\/(images\/thumbnails|thumbnails|asset-thumbnail|item-thumbnail|asset)\//i;
 
   // Demand string -> 1-5 numeric rating
   const DEMAND_RATING = {
@@ -155,6 +157,7 @@
   }
 
   function findVisibleTradeModal() {
+    // Strategy 1: standard modal selectors
     const candidates = document.querySelectorAll(
       ".modal.show, .modal.in, .modal-content, [role='dialog'], .trade-modal, .modal-dialog"
     );
@@ -168,6 +171,42 @@
           text.includes("items you gave") ||
           text.includes("items you received")) {
         return el.closest(".modal-content") || el.closest(".modal") || el;
+      }
+    }
+
+    // Strategy 2: fallback - Pekora may use a custom (non-Bootstrap) modal.
+    // Walk up from any visible "items you will give/gave" heading until we
+    // find a container that ALSO holds the receive heading.
+    const giveHeading =
+      findElementContainingText("items you will give") ||
+      findElementContainingText("items you gave");
+    if (giveHeading) {
+      let el = giveHeading;
+      for (let i = 0; i < 12 && el && el.parentElement; i++) {
+        const t = (el.textContent || "").toLowerCase();
+        const rect = el.getBoundingClientRect();
+        if (rect.width >= 280 &&
+            (t.includes("items you will receive") || t.includes("items you received"))) {
+          return el;
+        }
+        el = el.parentElement;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Walk text nodes to find the element whose text contains a phrase.
+   * Returns the smallest matching parent element, not the document body.
+   */
+  function findElementContainingText(phrase) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const t = (node.textContent || "").toLowerCase();
+      if (t.length < 200 && t.includes(phrase)) {
+        return node.parentElement;
       }
     }
     return null;
