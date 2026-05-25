@@ -37,6 +37,14 @@
   // If the route ever changes, this is the only place to update.
   const KOROMONS_PLAYER_URL = (id) => `https://www.koromons.com/player/${id}`;
 
+  // Koromons hosts each badge's artwork as an SVG at
+  //   https://www.koromons.com/svg/<slug>.svg
+  // where <slug> is the kebab-case form of the badge's icon / id, e.g.
+  //   collector, lucky-cat, sparkle-collector.
+  // We resolve the slug from def.icon when present (the API normally
+  // already returns it kebab-cased), and fall back to def.id otherwise.
+  const KOROMONS_SVG_URL = (slug) => `https://www.koromons.com/svg/${slug}.svg`;
+
   let observer = null;
   let scheduled = false;
 
@@ -300,10 +308,8 @@
     const circle = document.createElement("div");
     circle.className = "btrk-kb-circle";
 
-    const icon = document.createElement("span");
-    icon.className = "btrk-kb-icon";
-    icon.textContent = def.icon || "\uD83C\uDFC5"; // medal as fallback
-    circle.appendChild(icon);
+    // Real badge artwork from koromons.com; medal emoji on load failure.
+    circle.appendChild(buildBadgeIcon(def, "\uD83C\uDFC5"));
 
     const label = document.createElement("div");
     label.className = "btrk-kb-label";
@@ -323,10 +329,9 @@
     const circle = document.createElement("div");
     circle.className = "btrk-kb-circle";
 
-    const icon = document.createElement("span");
-    icon.className = "btrk-kb-icon";
-    icon.textContent = hb.icon || "\uD83D\uDC51"; // crown
-    circle.appendChild(icon);
+    // Hoarding badges use crown emoji as fallback if the SVG slug isn't
+    // resolvable (older entries that pre-date the artwork pipeline).
+    circle.appendChild(buildBadgeIcon(hb, "\uD83D\uDC51"));
 
     const label = document.createElement("div");
     label.className = "btrk-kb-label";
@@ -353,9 +358,7 @@
       circle.style.background = hexToRgba(cb.color, 0.12);
     }
 
-    const icon = document.createElement("span");
-    icon.className = "btrk-kb-icon";
-    icon.textContent = cb.icon || "\u2B50"; // star
+    const icon = buildBadgeIcon(cb, "\u2B50"); // star fallback
     circle.appendChild(icon);
 
     const label = document.createElement("div");
@@ -369,7 +372,73 @@
   }
 
   /**
-   * Convert "#rrggbb" / "#rgb" to an rgba() string at the given alpha.
+   * Resolve a koromons.com SVG slug from a badge definition.
+   *
+   * The Koromons API exposes badge artwork at
+   *   https://www.koromons.com/svg/<slug>.svg
+   * where <slug> is kebab-case (e.g. "collector", "lucky-cat",
+   * "sparkle-collector"). The API normally already returns the slug
+   * pre-formatted in the `icon` field, but we accept other shapes too:
+   *
+   *   - def.icon  : preferred, expected to already be a slug or icon name
+   *   - def.id    : fallback, kebab-cased on the fly
+   *
+   * If the source value contains anything that's clearly NOT a slug
+   * (whitespace, emoji, non-ASCII), we sanitise it to a usable slug.
+   * Returns null when no usable slug can be produced - the caller should
+   * then render an emoji/text fallback instead of a broken <img>.
+   */
+  function resolveBadgeSlug(def) {
+    if (!def) return null;
+    const candidate = (typeof def.icon === "string" && def.icon) || def.id;
+    if (typeof candidate !== "string" || !candidate.trim()) return null;
+    const slug = candidate
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_]+/g, "-")
+      // Strip anything that isn't slug-safe (emoji, punctuation, etc).
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    return slug || null;
+  }
+
+  /**
+   * Build a badge icon node. Returns an <img> pointing at the real
+   * Koromons SVG when a slug can be resolved, with an inline onerror
+   * handler that swaps the <img> for a <span> containing the supplied
+   * emoji fallback so a 404 doesn't leave us with a broken-image icon.
+   *
+   * If no slug is resolvable, returns the <span> fallback directly.
+   */
+  function buildBadgeIcon(def, fallbackEmoji) {
+    const slug = resolveBadgeSlug(def);
+    if (!slug) return makeIconSpan(fallbackEmoji);
+
+    const img = document.createElement("img");
+    img.className = "btrk-kb-icon btrk-kb-icon-img";
+    img.src = KOROMONS_SVG_URL(slug);
+    img.alt = (def && (def.name || def.label || def.id)) || "";
+    // SVGs from a static CDN; let the browser cache them across profiles.
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    img.draggable = false;
+    img.addEventListener("error", () => {
+      const span = makeIconSpan(fallbackEmoji);
+      if (img.parentNode) img.parentNode.replaceChild(span, img);
+    }, { once: true });
+    return img;
+  }
+
+  function makeIconSpan(text) {
+    const span = document.createElement("span");
+    span.className = "btrk-kb-icon";
+    span.textContent = text;
+    return span;
+  }
+
+  /**
    * Falls back to the input string on parse failure so non-hex colors
    * (e.g. CSS named colors) are passed through untouched.
    */
