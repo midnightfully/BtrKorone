@@ -267,7 +267,19 @@
     anchorAfter.insertAdjacentElement("afterend", section);
 
     try {
-      const userBadges = await KoromonsAPI.getUserBadges(userId);
+      // Koromons' /api/users/:id endpoint returns 403 when fetched
+      // directly from a pekora.zip content script (the request's
+      // Origin header trips a same-origin gate on koromons.com).
+      // Route the call through the background service worker, which
+      // makes the request without a web-page Origin and gets a normal
+      // 200 JSON response.
+      const userBadges = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: "FETCH_KOROMONS_USER_BADGES", userId },
+          (response) => resolve(response || null)
+        );
+      });
+      console.log(`[BtrKorone/KoromonsBadgeDisplay] uid=${userId} response:`, userBadges);
 
       // The user could have navigated away while we were awaiting -
       // bail if the section we created has been removed from the DOM
@@ -275,6 +287,18 @@
       if (!section.isConnected) return;
       if (getProfileUserId() !== userId) {
         section.remove();
+        return;
+      }
+
+      if (!userBadges) {
+        // SW returned null -> Koromons couldn't fetch this user (404,
+        // not yet tracked, etc). Distinct from the "found user but
+        // zero earned badges" case handled inside renderBadges().
+        const grid = section.querySelector(".btrkorone-koromons-badges-grid");
+        if (grid) {
+          grid.innerHTML =
+            '<div class="btrk-kb-empty">Could not load Koromons badges. (User may not be tracked on koromons.com.)</div>';
+        }
         return;
       }
 
@@ -378,7 +402,7 @@
     if (!grid.children.length) {
       const empty = document.createElement("div");
       empty.className = "btrk-kb-empty";
-      empty.textContent = "No Koromons badges to show for this user.";
+      empty.textContent = "This user has not earned any Koromons badges yet.";
       grid.appendChild(empty);
     }
   }

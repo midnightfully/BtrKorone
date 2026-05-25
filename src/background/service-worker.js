@@ -128,6 +128,13 @@ async function handleMessage(message, sender) {
     case "FETCH_AVATAR":
       return await handleFetchAvatar(message.userId);
 
+    case "FETCH_KOROMONS_USER_BADGES":
+      // Koromons' /api/users/:id endpoint returns 403 when called
+      // directly from a pekora.zip content script (Origin gate). We
+      // proxy the request through the service worker so it goes out
+      // without a web-page Origin header and gets a normal 200 back.
+      return await KoromonsAPI.getUserBadges(message.userId);
+
     case "GET_CURRENT_PEKORA_USER":
       return await handleGetCurrentPekoraUser();
 
