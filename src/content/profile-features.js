@@ -3,9 +3,11 @@
  *
  * On Korone profile pages (/users/:userId/profile), fetches the user's
  * Koromons badge data and injects a "Koromons Badges" section directly
- * below the existing game "Badges" section, mirroring the RoliBadges
- * layout: a horizontal row of circular tiles with a green ring for
- * badges the user has earned and a grey ring for ones they have not.
+ * below the existing game "Badges" section, mirroring how the Koromons
+ * site itself displays badges on /player/:id - we render ONLY the
+ * badges the player currently owns, each as a circular tile with the
+ * earned-style green ring. Locked / not-yet-earned badges are omitted
+ * from the grid entirely so the section stays compact.
  *
  * Data source (https://www.koromons.com/api):
  *   GET /api/users/:userId   -> {
@@ -330,12 +332,13 @@
     const hoardingBadges = (userBadges && Array.isArray(userBadges.hoardingBadges)) ? userBadges.hoardingBadges : [];
 
     // Render order:
-    //   1. Every badge ID we have curated display metadata for, in
-    //      BADGE_ORDER. Earned tiles get a green ring, missing/false get
-    //      a grey ring. This guarantees a stable, RoliBadges-style row.
-    //   2. Any badge IDs that the API returned but we don't yet know
-    //      about - render them through humanizeBadgeId() so future
-    //      additions don't disappear silently.
+    //   1. Every EARNED badge ID we have curated display metadata for,
+    //      in BADGE_ORDER. Locked badges are skipped entirely so the
+    //      section only shows what the player actually owns - matching
+    //      how koromons.com/player/:id displays its own badge row.
+    //   2. Any earned badge IDs that the API returned but we don't yet
+    //      know about - render them through humanizeBadgeId() so future
+    //      Koromons additions don't disappear silently.
     //   3. Hoarding badges (always earned by definition).
     //   4. Custom badges (staff-issued, with custom color).
 
@@ -343,19 +346,19 @@
 
     BADGE_ORDER.forEach(id => {
       seenIds.add(id);
+      if (!earnedMap[id]) return; // skip badges the player hasn't earned
       const display = BADGE_DISPLAY[id];
-      const earned = !!earnedMap[id];
-      grid.appendChild(buildStandardTile(id, display, earned));
+      grid.appendChild(buildStandardTile(id, display, true));
     });
 
     Object.keys(earnedMap).forEach(id => {
       if (seenIds.has(id)) return;
       seenIds.add(id);
-      const earned = !!earnedMap[id];
-      // Unknown ID - render with auto-generated label + medal icon so the
-      // tile is not lost. Console-warn once so we know to add metadata.
+      if (!earnedMap[id]) return; // skip not-earned unknowns too
+      // Unknown ID - render with auto-generated label + medal icon so
+      // the tile is not lost. Console-warn so we know to add metadata.
       console.warn(`[BtrKorone/KoromonsBadgeDisplay] Unknown badge id: ${id} - falling back to humanized label.`);
-      grid.appendChild(buildStandardTile(id, null, earned));
+      grid.appendChild(buildStandardTile(id, null, true));
     });
 
     hoardingBadges.forEach(hb => {
