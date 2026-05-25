@@ -65,40 +65,46 @@
    *   4. Trading activity badges
    *   5. Identity / fun
    */
-  const BADGE_DISPLAY = {
-    // RAP tiers
-    hundredK:         { name: "100K+",             icon: "\uD83D\uDCAF" }, // 100
-    fiveHundredK:     { name: "500K+",             icon: "\uD83D\uDCB0" }, // money bag
-    oneMillion:       { name: "1M+",               icon: "\uD83D\uDCB5" }, // dollar
-    twoMillion:       { name: "2M+",               icon: "\uD83D\uDCB4" }, // yen
-    fiveMillion:      { name: "5M+",               icon: "\uD83D\uDCB6" }, // euro
-    tenMillion:       { name: "10M+",              icon: "\uD83D\uDCB7" }, // pound
-    twentyMillion:    { name: "20M+",              icon: "\uD83C\uDFE6" }, // bank
+  // Real Koromons SVG icons live under https://www.koromons.com/svg/<name>.svg
+  // The filename for each badge has been verified against the live site;
+  // any entry without iconUrl falls back to its `icon` emoji until the
+  // matching SVG path is confirmed.
+  const KOROMONS_SVG = (name) => `https://www.koromons.com/svg/${name}.svg`;
 
-    // Collection
-    accessorized:     { name: "Accessorized",      icon: "\uD83C\uDFA9" }, // top hat
-    collector:        { name: "Collector",         icon: "\uD83D\uDCBC" }, // briefcase
-    rareOwner:        { name: "Rare Owner",        icon: "\uD83D\uDC8E" }, // gem
-    rareEnthusiast:   { name: "Rare Enthusiast",   icon: "\uD83D\uDD37" }, // small blue diamond
-    rareSupremist:    { name: "Rare Supremist",    icon: "\uD83D\uDD2E" }, // crystal ball
-    dominator:        { name: "Dominator",         icon: "\uD83D\uDC51" }, // crown
-    sparkly:          { name: "Sparkly",           icon: "\u2728"        }, // sparkles
-    federated:        { name: "Federated",         icon: "\uD83D\uDEE1\uFE0F" }, // shield
+  const BADGE_DISPLAY = {
+    // RAP tiers - SVG paths not yet confirmed; emoji fallback for now.
+    hundredK:         { name: "100K+",             icon: "\uD83D\uDCAF" },
+    fiveHundredK:     { name: "500K+",             icon: "\uD83D\uDCB0" },
+    oneMillion:       { name: "1M+",               icon: "\uD83D\uDCB5" },
+    twoMillion:       { name: "2M+",               icon: "\uD83D\uDCB4" },
+    fiveMillion:      { name: "5M+",               icon: "\uD83D\uDCB6" },
+    tenMillion:       { name: "10M+",              icon: "\uD83D\uDCB7" },
+    twentyMillion:    { name: "20M+",              icon: "\uD83C\uDFE6" },
+
+    // Collection - all five rarity-based badges have official SVGs.
+    accessorized:     { name: "Accessorized",      icon: "\uD83C\uDFA9",       iconUrl: KOROMONS_SVG("accessorized") },
+    collector:        { name: "Collector",         icon: "\uD83D\uDCBC",       iconUrl: KOROMONS_SVG("collector") },
+    rareOwner:        { name: "Rare Owner",        icon: "\uD83D\uDC8E",       iconUrl: KOROMONS_SVG("rare-owner") },
+    rareEnthusiast:   { name: "Rare Enthusiast",   icon: "\uD83D\uDD37" }, // SVG path TBD
+    rareSupremist:    { name: "Rare Supremist",    icon: "\uD83D\uDD2E",       iconUrl: KOROMONS_SVG("rare-supremist") },
+    dominator:        { name: "Dominator",         icon: "\uD83D\uDC51" }, // SVG path TBD
+    sparkly:          { name: "Sparkly",           icon: "\u2728",             iconUrl: KOROMONS_SVG("sparkle-collector") },
+    federated:        { name: "Federated",         icon: "\uD83D\uDEE1\uFE0F" }, // SVG path TBD
 
     // Serials
-    lowSerial:        { name: "Low Serial",        icon: "\uD83D\uDD22" }, // 1234
-    sequentialSerial: { name: "Sequential Serial", icon: "\uD83D\uDCC8" }, // chart up
-    serialOne:        { name: "Serial #1",         icon: "1\uFE0F\u20E3" }, // keycap 1
+    lowSerial:        { name: "Low Serial",        icon: "\uD83D\uDD22",       iconUrl: KOROMONS_SVG("low-serial") },
+    sequentialSerial: { name: "Sequential Serial", icon: "\uD83D\uDCC8",       iconUrl: KOROMONS_SVG("sequential-serial") },
+    serialOne:        { name: "Serial #1",         icon: "1\uFE0F\u20E3" }, // SVG path TBD
 
-    // Trading activity
-    tradeAdvertiser:  { name: "Trade Advertiser",  icon: "\uD83D\uDCE2" }, // loudspeaker
-    frequentTrader:   { name: "Frequent Trader",   icon: "\uD83D\uDD04" }, // counterclockwise arrows
-    activeTrader:     { name: "Active Trader",     icon: "\u26A1"        }, // bolt
-    boundlessTrader:  { name: "Boundless Trader",  icon: "\u267E\uFE0F" }, // infinity
+    // Trading activity - SVG paths TBD
+    tradeAdvertiser:  { name: "Trade Advertiser",  icon: "\uD83D\uDCE2" },
+    frequentTrader:   { name: "Frequent Trader",   icon: "\uD83D\uDD04" },
+    activeTrader:     { name: "Active Trader",     icon: "\u26A1"        },
+    boundlessTrader:  { name: "Boundless Trader",  icon: "\u267E\uFE0F" },
 
     // Identity / fun
-    luckycat:         { name: "Lucky Cat",         icon: "\uD83D\uDC08" }, // cat
-    verified:         { name: "Verified",          icon: "\u2705"        }  // check mark
+    luckycat:         { name: "Lucky Cat",         icon: "\uD83D\uDC08",       iconUrl: KOROMONS_SVG("lucky-cat") },
+    verified:         { name: "Verified",          icon: "\u2705"        }  // SVG path TBD
   };
 
   // Display order = insertion order of BADGE_DISPLAY. Snapshotted now so
@@ -429,10 +435,19 @@
       img.loading = "lazy";
       img.referrerPolicy = "no-referrer";
       circle.appendChild(img);
+    } else if (!hb.icon) {
+      // No icon supplied - fall back to Koromons' generic hoarder.svg.
+      const img = document.createElement("img");
+      img.className = "btrk-kb-icon btrk-kb-icon-img";
+      img.src = "https://www.koromons.com/svg/hoarder.svg";
+      img.alt = labelText;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      circle.appendChild(img);
     } else {
       const icon = document.createElement("span");
       icon.className = "btrk-kb-icon";
-      icon.textContent = hb.icon || "\uD83D\uDC51"; // crown
+      icon.textContent = hb.icon;
       circle.appendChild(icon);
     }
 
