@@ -74,39 +74,43 @@
   const KOROMONS_SVG = (name) => `https://www.koromons.com/svg/${name}.svg`;
 
   const BADGE_DISPLAY = {
-    // RAP tiers - SVG paths not yet confirmed; emoji fallback for now.
-    hundredK:         { name: "100K+",             icon: "\uD83D\uDCAF" },
-    fiveHundredK:     { name: "500K+",             icon: "\uD83D\uDCB0" },
-    oneMillion:       { name: "1M+",               icon: "\uD83D\uDCB5" },
-    twoMillion:       { name: "2M+",               icon: "\uD83D\uDCB4" },
-    fiveMillion:      { name: "5M+",               icon: "\uD83D\uDCB6" },
-    tenMillion:       { name: "10M+",              icon: "\uD83D\uDCB7" },
-    twentyMillion:    { name: "20M+",              icon: "\uD83C\uDFE6" },
+    // RAP tiers - all seven confirmed via /svg/<n>-value.svg.
+    hundredK:         { name: "100K+",             icon: "\uD83D\uDCAF",       iconUrl: KOROMONS_SVG("100k-value") },
+    fiveHundredK:     { name: "500K+",             icon: "\uD83D\uDCB0",       iconUrl: KOROMONS_SVG("500k-value") },
+    oneMillion:       { name: "1M+",               icon: "\uD83D\uDCB5",       iconUrl: KOROMONS_SVG("1m-value") },
+    twoMillion:       { name: "2M+",               icon: "\uD83D\uDCB4",       iconUrl: KOROMONS_SVG("2m-value") },
+    fiveMillion:      { name: "5M+",               icon: "\uD83D\uDCB6",       iconUrl: KOROMONS_SVG("5m-value") },
+    tenMillion:       { name: "10M+",              icon: "\uD83D\uDCB7",       iconUrl: KOROMONS_SVG("10m-value") },
+    twentyMillion:    { name: "20M+",              icon: "\uD83C\uDFE6",       iconUrl: KOROMONS_SVG("20m-value") },
 
-    // Collection - all five rarity-based badges have official SVGs.
+    // Collection. rareEnthusiast intentionally shares rare-owner.svg
+    // with rareOwner - same artwork on Koromons, different earn
+    // criteria - confirmed by the user.
     accessorized:     { name: "Accessorized",      icon: "\uD83C\uDFA9",       iconUrl: KOROMONS_SVG("accessorized") },
     collector:        { name: "Collector",         icon: "\uD83D\uDCBC",       iconUrl: KOROMONS_SVG("collector") },
     rareOwner:        { name: "Rare Owner",        icon: "\uD83D\uDC8E",       iconUrl: KOROMONS_SVG("rare-owner") },
-    rareEnthusiast:   { name: "Rare Enthusiast",   icon: "\uD83D\uDD37" }, // SVG path TBD
+    rareEnthusiast:   { name: "Rare Enthusiast",   icon: "\uD83D\uDD37",       iconUrl: KOROMONS_SVG("rare-owner") },
     rareSupremist:    { name: "Rare Supremist",    icon: "\uD83D\uDD2E",       iconUrl: KOROMONS_SVG("rare-supremist") },
-    dominator:        { name: "Dominator",         icon: "\uD83D\uDC51" }, // SVG path TBD
+    dominator:        { name: "Dominator",         icon: "\uD83D\uDC51",       iconUrl: KOROMONS_SVG("dominus-collector") },
     sparkly:          { name: "Sparkly",           icon: "\u2728",             iconUrl: KOROMONS_SVG("sparkle-collector") },
-    federated:        { name: "Federated",         icon: "\uD83D\uDEE1\uFE0F" }, // SVG path TBD
+    federated:        { name: "Federated",         icon: "\uD83D\uDEE1\uFE0F", iconUrl: KOROMONS_SVG("federation-collector") },
 
     // Serials
     lowSerial:        { name: "Low Serial",        icon: "\uD83D\uDD22",       iconUrl: KOROMONS_SVG("low-serial") },
     sequentialSerial: { name: "Sequential Serial", icon: "\uD83D\uDCC8",       iconUrl: KOROMONS_SVG("sequential-serial") },
-    serialOne:        { name: "Serial #1",         icon: "1\uFE0F\u20E3" }, // SVG path TBD
+    serialOne:        { name: "Serial #1",         icon: "1\uFE0F\u20E3",      iconUrl: KOROMONS_SVG("first-owner") },
 
-    // Trading activity - SVG paths TBD
+    // Trading activity - SVG paths still TBD.
     tradeAdvertiser:  { name: "Trade Advertiser",  icon: "\uD83D\uDCE2" },
     frequentTrader:   { name: "Frequent Trader",   icon: "\uD83D\uDD04" },
     activeTrader:     { name: "Active Trader",     icon: "\u26A1"        },
     boundlessTrader:  { name: "Boundless Trader",  icon: "\u267E\uFE0F" },
 
-    // Identity / fun
+    // Identity / fun. Verified.svg is intentionally capitalized - it's
+    // the only filename on the site that breaks the lowercase-kebab
+    // convention. Don't lowercase it inside KOROMONS_SVG().
     luckycat:         { name: "Lucky Cat",         icon: "\uD83D\uDC08",       iconUrl: KOROMONS_SVG("lucky-cat") },
-    verified:         { name: "Verified",          icon: "\u2705"        }  // SVG path TBD
+    verified:         { name: "Verified",          icon: "\u2705",             iconUrl: KOROMONS_SVG("Verified") }
   };
 
   // Display order = insertion order of BADGE_DISPLAY. Snapshotted now so
